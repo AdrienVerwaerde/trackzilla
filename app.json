@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "pocket-sensors",
-    "slug": "pocket-sensors",
+    "name": "Trackzilla",
+    "slug": "trackzilla",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "pocketsensors",
+    "scheme": "trackzilla",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"

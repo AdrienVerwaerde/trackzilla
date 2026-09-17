@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -15,10 +15,13 @@ import {
 /** Full-scale deflection of a bar, in g. */
 const MaxG = 2;
 
+/** Above this magnitude, something much bigger than a shake is going on. */
+const GodzillaThreshold = 2;
+
 const AxisColors = {
-  x: '#00f7ff',
+  x: '#50A4C9',
   y: '#00ff88',
-  z: '#ff6200',
+  z: '#C6311D',
 } as const;
 
 const StatusLabels: Record<AccelerometerStatus, string> = {
@@ -80,17 +83,19 @@ export default function MotionScreen() {
   const status = useSensorStore((state) => state.accelerometerStatus);
 
   const isShaking = magnitude > ShakeThreshold;
+  const isGodzilla = magnitude > GodzillaThreshold;
 
   return (
-    <ThemedView style={styles.container}>
+    // Transparent: the app background photo shows through from the root layout.
+    <View style={styles.container}>
       {/* The lifecycle badge above already covers the status bar inset. */}
       <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
         <View style={styles.header}>
           <ThemedText type="subtitle">Motion</ThemedText>
           {isShaking && (
-            <View style={styles.shakeBadge}>
-              <ThemedText type="smallBold" style={styles.shakeText}>
-                SHAKE
+            <View style={styles.badge}>
+              <ThemedText type="smallBold" style={styles.badgeText}>
+                SHAKES DETECTED
               </ThemedText>
             </View>
           )}
@@ -102,6 +107,15 @@ export default function MotionScreen() {
           </ThemedText>
           <ThemedText type="smallBold">{magnitude.toFixed(2)} g</ThemedText>
         </ThemedView>
+
+        {isGodzilla && (
+          <View style={[styles.badge, styles.godzillaBadge]}>
+            <Image source={require('@/assets/images/icon.png')} style={styles.badgeImage} />
+            <ThemedText type="smallBold" style={styles.godzillaBadgeText}>
+              GODZILLA DETECTED !!
+            </ThemedText>
+          </View>
+        )}
 
         <View style={styles.axes}>
           <AxisBar axis="x" value={x} />
@@ -124,7 +138,7 @@ export default function MotionScreen() {
           </ThemedText>
         </View>
       </SafeAreaView>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -148,14 +162,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Spacing.three,
   },
-  shakeBadge: {
-    backgroundColor: '#ff6200',
+  badge: {
+    backgroundColor: '#C6311D',
     borderRadius: Spacing.two,
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.three,
   },
-  shakeText: {
-    color: '#000000',
+  badgeText: {
+    color: '#efffff',
+  },
+  godzillaBadge: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'transparent',
+  },
+  badgeImage: {
+    width: 75,
+    height: 75,
+    marginRight: Spacing.two,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#C6311D',
+  },
+  godzillaBadgeText: {
+    color: '#efffff',
+    backgroundColor: '#C6311D',
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Spacing.two,
+    textAlign: 'center',
+    flex: 1,
   },
   summary: {
     flexDirection: 'row',

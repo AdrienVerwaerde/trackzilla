@@ -5,7 +5,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useSensorStore } from '@/stores/sensor-store';
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const LastEventsCount = 5;
@@ -17,17 +17,22 @@ export default function HomeScreen() {
   const lastEvents = log.slice(0, LastEventsCount);
 
   return (
-    <ThemedView style={styles.container}>
+    // Transparent: the app background photo shows through from the root layout.
+    <View style={styles.container}>
       {/* The lifecycle badge above already covers the status bar inset. */}
       <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
         <View style={styles.heroSection}>
           <Image
-            source={require('@/assets/images/este.png')}
-            style={{ width: 200, height: 200, borderRadius: 50, borderColor: '#eff', borderWidth: 3 }}
+            source={require('@/assets/images/logo-glow.png')}
+            style={{ width: 200, height: 200, position: 'absolute', top: -10, left: -10, right: 0, bottom: 0, zIndex: 100}}
           />
-          <Text style={{ color: 'white', fontSize: 28, textAlign: 'center' }}>
-            Coucou
-          </Text>
+          <Image
+            source={require('@/assets/images/icon.png')}
+            style={{ width: 200, height: 200, borderRadius: 50 }}
+          />
+          <ThemedText type="subtitle">
+            Trackzilla
+          </ThemedText>
         </View>
 
         <View style={styles.lastEvents}>
@@ -53,7 +58,7 @@ export default function HomeScreen() {
           </Link>
         </View>
       </SafeAreaView>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -72,7 +77,6 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
   },
   heroSection: {
-    // No flex: the hero takes the height it needs, the list gets the rest.
     alignItems: 'center',
     paddingHorizontal: Spacing.four,
     gap: Spacing.four,
@@ -87,7 +91,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    backgroundColor: 'rgba(0, 247, 255, 0.92)',
+    backgroundColor: '#50A4C9',
   },
   pressed: {
     opacity: 0.7,

@@ -16,7 +16,8 @@ export default function JournalScreen() {
   const backgroundMs = useSensorStore((state) => state.backgroundMs);
 
   return (
-    <ThemedView style={styles.container}>
+    // Transparent: the app background photo shows through from the root layout.
+    <View style={styles.container}>
       {/* The lifecycle badge above already covers the status bar inset. */}
       <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
         <View style={styles.header}>
@@ -51,7 +52,7 @@ export default function JournalScreen() {
           }
         />
       </SafeAreaView>
-    </ThemedView>
+    </View>
   );
 }
 

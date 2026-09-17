@@ -1,6 +1,6 @@
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
-import { Fonts, ThemeColor } from '@/constants/theme';
+import { Fonts, GoldmanFont, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
@@ -52,9 +52,12 @@ const styles = StyleSheet.create({
     lineHeight: 52,
   },
   subtitle: {
+    // Goldman ships the weight in the family name, so no `fontWeight` here:
+    // asking for one makes Android look for a face that does not exist and fall
+    // back to the system font.
+    fontFamily: GoldmanFont,
     fontSize: 32,
     lineHeight: 44,
-    fontWeight: 600,
   },
   link: {
     lineHeight: 30,
