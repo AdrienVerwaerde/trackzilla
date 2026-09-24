@@ -1,56 +1,43 @@
-# Welcome to your Expo app 👋
+# Trackzilla — Projet Sentinelle
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Capteur ESP32 → broker MQTT → **backend** (Node, SQLite) → **app** (Expo).
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+backend/   Node 22.13+ · node:sqlite · MQTT → REST + WebSocket
+app/       Expo (base Pocket Sensors) · tableau de bord temps réel + historique
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Lancement
 
-### Other setup steps
+Prérequis : Node **22.13 ou plus** (`node -v`), un `.env` copié depuis `.env.example` dans `backend/` et dans `app/`.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```bash
+cd backend && npm install && npm start
+cd app && npm install && npx expo start
+```
 
-## Learn more
+Dans `app/.env`, `EXPO_PUBLIC_API_URL` doit pointer vers l'**IP du portable** sur le réseau partagé, pas `localhost`.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Contrat d'API
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```
+GET  /devices                                   → [{ id, group, status, lastSeen }]
+GET  /devices/:id/measurements?from=&to=&step=  → [{ ts, t, h }]
+GET  /devices/:id/thresholds                    → { tMin, tMax, hMin, hMax, holdMinutes }
+PUT  /devices/:id/thresholds                    ← même objet
+POST /devices/:id/commands                      ← { "led": true } → 202 { "sent": true }
 
-## Join the community
+WS   measurement    { device, ts, t, h }
+     alert          { device, ts, kind, value, threshold }
+     alert_cleared  { device, ts, kind }
+     device_status  { device, status }
+```
 
-Join our community of developers creating universal apps.
+Tous les `ts` sont en secondes epoch, UTC.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Contribution
+
+| Membre | Couche | Branches |
+| --- | --- | --- |
+| Adrien Verwaerde | App (tableau de bord, historique, cycle de vie du WebSocket) | `frontend` |
+| _à compléter_ | Backend (MQTT, stockage, historique, seuils, commandes, WebSocket) | `backend` |
