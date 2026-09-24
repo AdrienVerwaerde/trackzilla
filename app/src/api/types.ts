@@ -11,8 +11,9 @@ export type Device = {
 
 export type Measurement = {
   ts: number;
-  t: number;
-  h: number;
+  /** Null when the reading carried no temperature (the backend accepts either value alone). */
+  t: number | null;
+  h: number | null;
 };
 
 export type Thresholds = {

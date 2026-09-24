@@ -1,7 +1,7 @@
 import { LogRow } from '@/components/log-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Spacing, TopInset } from '@/constants/theme';
 import { useSensorStore } from '@/stores/sensor-store';
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
@@ -19,29 +19,24 @@ export default function HomeScreen() {
   return (
     // Transparent: the app background photo shows through from the root layout.
     <View style={styles.container}>
-      {/* The lifecycle badge above already covers the status bar inset. */}
-      <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
+      <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.safeArea}>
         <View style={styles.heroSection}>
           <Image
-            source={require('@/assets/images/logo-glow.png')}
-            style={{ width: 200, height: 200, position: 'absolute', top: -10, left: -10, right: 0, bottom: 0, zIndex: 100}}
-          />
-          <Image
-            source={require('@/assets/images/icon.png')}
+            source={require('@/assets/images/icon.jpg')}
             style={{ width: 200, height: 200, borderRadius: 50 }}
           />
           <ThemedText type="subtitle">
-            Trackzilla
+            Potageek
           </ThemedText>
         </View>
 
         <View style={styles.lastEvents}>
           <ThemedText type="small" themeColor="textSecondary">
-            Last events
+            Derniers relevés
           </ThemedText>
           {lastEvents.length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary">
-              No event yet
+              Pas d'informations pour l'instant.
             </ThemedText>
           ) : (
             lastEvents.map((event) => <LogRow key={event.id} event={event} />)
@@ -50,8 +45,8 @@ export default function HomeScreen() {
           <Link href="/dashboard" asChild>
             <Pressable style={({ pressed }) => pressed && styles.pressed}>
               <ThemedView type="backgroundElement" style={styles.seeMoreButton}>
-                <ThemedText type="small" style={{ color: '#333' }}>
-                  SEE MORE
+                <ThemedText type="small" style={{ color: '#eaeaea' }}>
+                  CONTRÔLE DU CAPTEUR
                 </ThemedText>
               </ThemedView>
             </Pressable>
@@ -71,6 +66,8 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     width: '100%',
+    // Margin, not padding: SafeAreaView owns its padding for the status bar.
+    marginTop: TopInset,
     paddingHorizontal: Spacing.four,
     gap: Spacing.three,
     paddingBottom: BottomTabInset + Spacing.three,
@@ -91,7 +88,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    backgroundColor: '#50A4C9',
+    backgroundColor: '#fe7f30',
   },
   pressed: {
     opacity: 0.7,

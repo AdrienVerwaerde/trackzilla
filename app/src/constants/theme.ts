@@ -13,14 +13,16 @@ export const Colors = {
     background: '#ffffff',
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    backgroundButton: '#fe7f30',
+    textSecondary: '#eaeaea',
   },
   dark: {
     text: '#ffffff',
     background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    backgroundElement: '#727236',
+    backgroundSelected: '#999344',
+    backgroundButton: '#fe7f30',
+    textSecondary: '#eaeaea',
   },
 } as const;
 
@@ -52,10 +54,10 @@ export const Fonts = Platform.select({
 });
 
 /**
- * Goldman (Google Fonts), loaded from `@expo-google-fonts/goldman` in the root
- * layout. The package ships a 400Regular face too, if a lighter cut is needed.
+ * Oi (Google Fonts), loaded from `@expo-google-fonts/oi` in the root layout.
+ * It only exists in one weight: 400 Regular.
  */
-export const GoldmanFont = 'Goldman_700Bold';
+export const TitleFont = 'Oi_400Regular';
 
 export const Spacing = {
   half: 2,
@@ -68,7 +70,7 @@ export const Spacing = {
 } as const;
 
 /** Icon and label color of the selected tab. */
-export const SelectedTabColor = '#50A4C9';
+export const SelectedTabColor = '#fe7f30';
 
 /**
  * Opacity of the app background photo, which fades into the theme `background`
@@ -77,6 +79,9 @@ export const SelectedTabColor = '#50A4C9';
  * strength.
  */
 export const BackgroundImageOpacity = 0.2;
+
+/** Space between the status bar and the top of each screen's content. */
+export const TopInset = Spacing.five;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;

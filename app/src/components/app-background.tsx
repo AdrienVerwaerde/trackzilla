@@ -21,7 +21,7 @@ export function AppBackground({ style, children, ...otherProps }: ViewProps) {
   return (
     <View style={[styles.root, { backgroundColor: theme.background }, style]} {...otherProps}>
       <Image
-        source={require('@/assets/images/godzilla.jpg')}
+        source={require('@/assets/images/potager.jpg')}
         style={[StyleSheet.absoluteFill, styles.image]}
         contentFit="cover"
         accessible={false}

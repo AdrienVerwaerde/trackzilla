@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Trackzilla",
-    "slug": "trackzilla",
+    "name": "Potageek",
+    "slug": "potageek",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "trackzilla",
+    "scheme": "potageek",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -21,16 +21,10 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.jpg"
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-sensors",
-        {
-          "motionPermission": "Allow $(PRODUCT_NAME) to read the accelerometer to display live motion."
-        }
-      ],
       [
         "expo-splash-screen",
         {

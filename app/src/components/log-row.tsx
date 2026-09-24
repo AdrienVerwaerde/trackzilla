@@ -5,23 +5,23 @@ import { ThemedView } from './themed-view';
 
 import { Spacing } from '@/constants/theme';
 import { type LogEvent } from '@/stores/sensor-store';
-import { formatDuration, formatTime } from '@/utils/format';
+import { formatTime } from '@/utils/format';
 
 export function LogRow({ event }: { event: LogEvent }) {
+  // Rows alternate between two backgrounds. Ids are consecutive, so their parity
+  // stripes the list like an index would, but a row keeps its color when new
+  // events are inserted above it.
+  const isEven = event.id % 2 === 0;
+
   return (
-    <ThemedView type="backgroundElement" style={styles.row}>
+    <ThemedView type={isEven ? 'backgroundElement' : 'backgroundSelected'} style={styles.row}>
       <ThemedText type="code" themeColor="textSecondary">
         {formatTime(event.at)}
       </ThemedText>
       <ThemedText type="code" style={styles.message}>
         {event.message}
       </ThemedText>
-      {event.durationMs !== undefined && (
-        <ThemedText type="code" themeColor="textSecondary">
-          {formatDuration(event.durationMs)}
-        </ThemedText>
-      )}
-      <ThemedView type="backgroundSelected" style={styles.sourceTag}>
+      <ThemedView type={isEven ? 'backgroundSelected' : 'backgroundElement'} style={styles.sourceTag}>
         <ThemedText type="code" themeColor="textSecondary">
           {event.source}
         </ThemedText>
