@@ -29,7 +29,9 @@ export default function DashboardScreen() {
         </View>
 
         <LiveCard />
-
+        <ThemedText type="small" themeColor="textSecondary" style={{paddingBottom: Spacing.two}}>
+          Relevés
+        </ThemedText>
         <FlatList
           data={log}
           keyExtractor={(event) => String(event.id)}
@@ -37,7 +39,7 @@ export default function DashboardScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <ThemedText type="small" themeColor="textSecondary">
-              Pas d'informations pour l'instant. Les relevés s'afficheront ici. 
+              Pas d'informations pour l'instant. Les relevés s'afficheront ici.
             </ThemedText>
           }
         />
