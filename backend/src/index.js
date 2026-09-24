@@ -1,7 +1,9 @@
 import { connectBroker } from './mqtt.js';
+import { createServer } from './server.js';
 import { recordMeasurement, recordStatus } from './store.js';
 
 const group = process.env.MQTT_GROUP;
+const port = Number(process.env.PORT ?? 3000);
 
 connectBroker({
   onTelemetry: (device, data) => {
@@ -17,4 +19,9 @@ connectBroker({
 
     console.log(`[status] ${device} ${event.status}`);
   },
+});
+
+// 0.0.0.0, not localhost: the phone reaches the laptop over the shared network.
+createServer().listen(port, '0.0.0.0', () => {
+  console.log(`[http] listening on http://0.0.0.0:${port}`);
 });
