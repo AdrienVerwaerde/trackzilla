@@ -11,6 +11,7 @@ import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { useAccelerometer } from '@/hooks/use-accelerometer';
 import { useAppLifecycle } from '@/hooks/use-app-lifecycle';
 import { useBattery } from '@/hooks/use-battery';
+import { useTelemetrySocket } from '@/hooks/use-telemetry-socket';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,6 +21,7 @@ export default function TabLayout() {
   useAppLifecycle();
   useAccelerometer();
   useBattery();
+  useTelemetrySocket();
 
   // The navigator paints `colors.background` behind each screen, which would sit
   // between the background photo and the screen content.

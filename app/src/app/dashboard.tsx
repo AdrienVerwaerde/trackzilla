@@ -2,6 +2,7 @@ import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BatteryCard } from '@/components/battery-card';
+import { LiveCard } from '@/components/live-card';
 import { LogRow } from '@/components/log-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -38,6 +39,7 @@ export default function JournalScreen() {
           <ThemedText type="smallBold">{formatDuration(backgroundMs)}</ThemedText>
         </ThemedView>
 
+        <LiveCard />
         <BatteryCard />
 
         <FlatList
