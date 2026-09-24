@@ -16,6 +16,8 @@ cd backend && npm install && npm start
 cd app && npm install && npx expo start
 ```
 
+En développement, `npm run dev` relance le backend à chaque modification.
+
 Dans `app/.env`, `EXPO_PUBLIC_API_URL` doit pointer vers l'**IP du portable** sur le réseau partagé, pas `localhost`.
 
 ## Contrat d'API
