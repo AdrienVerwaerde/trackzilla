@@ -31,9 +31,16 @@ export function connectBroker({ onTelemetry, onStatus }) {
     });
   });
 
-  client.on('message', (topic, payload) => {
+  client.on('message', (topic, payload, packet) => {
     const { device, channel } = parseTopic(topic);
     const raw = payload.toString();
+
+    // The broker replays its retained message to every new subscriber. For a
+    // status that is the current known state, worth keeping; for a reading it
+    // is an old one, and storing it again duplicates the row on each restart.
+    if (channel === 'telemetry' && packet.retain) {
+      return console.log(`[mqtt] ignoring retained reading for ${device}`);
+    }
 
     if (channel === 'status') return onStatus(device, raw);
 
