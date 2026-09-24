@@ -1,0 +1,18 @@
+{
+  "name": "trackzilla-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/index.js",
+    "start": "node --env-file=.env src/index.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "mqtt": "^5.16.0",
+    "ws": "^8.21.3"
+  }
+}

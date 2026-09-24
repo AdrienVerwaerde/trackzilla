@@ -48,3 +48,10 @@ example
 # generated native folders
 /ios
 /android
+
+# backend
+.env
+!.env.example
+*.db
+*.db-*
+*.sqlite
