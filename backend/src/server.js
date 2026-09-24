@@ -6,6 +6,7 @@ import {
   getThresholds,
   listDevices,
   nowSeconds,
+  recordEvent,
   saveThresholds,
 } from './store.js';
 
@@ -24,7 +25,11 @@ function readInteger(value) {
 /** A threshold bound is a number, or null when that bound is not watched. */
 const isBound = (value) => value === null || Number.isFinite(value);
 
-export function createServer() {
+/**
+ * `publishCommand` is injected rather than imported: this module answers HTTP
+ * and knows nothing about MQTT. index.js is the only place aware of both.
+ */
+export function createServer({ publishCommand }) {
   const app = express();
   app.use(express.json());
 
@@ -76,6 +81,22 @@ export function createServer() {
     }
 
     res.json(saveThresholds(req.params.id, { tMin, tMax, hMin, hMax, holdMinutes }));
+  });
+
+  app.post('/devices/:id/commands', (req, res) => {
+    const device = req.params.id;
+    if (!deviceExists(device)) return notFound(res);
+
+    const { led } = req.body ?? {};
+    if (typeof led !== 'boolean') return badRequest(res, '`led` must be a boolean');
+
+    const topic = publishCommand(device, { led });
+    recordEvent(device, nowSeconds(), 'command', { led });
+    console.log(`[cmd] ${topic} ${JSON.stringify({ led })}`);
+
+    // 202, not 200: the command left for the broker. Whether the box received
+    // it, let alone obeyed, is something this request can never know.
+    res.status(202).json({ sent: true });
   });
 
   return app;

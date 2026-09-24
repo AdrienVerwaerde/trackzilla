@@ -42,7 +42,7 @@ export function connectBroker({ onTelemetry, onStatus }) {
       return console.log(`[mqtt] ignoring retained reading for ${device}`);
     }
 
-    if (channel === 'status') return onStatus(device, raw);
+    if (channel === 'status') return onStatus(device, raw, { retained: packet.retain });
 
     // A malformed payload must never bring the server down.
     let data;
@@ -58,5 +58,15 @@ export function connectBroker({ onTelemetry, onStatus }) {
   client.on('error', (error) => console.error('[mqtt]', error.message));
   client.on('reconnect', () => console.log('[mqtt] reconnecting...'));
 
-  return client;
+  /**
+   * QoS 1 — at least once. The default QoS 0 drops the message when the link
+   * blinks, and a LED that never lights up is the demo failing in silence.
+   */
+  function publishCommand(device, command) {
+    const topic = `sentinelle/${MQTT_GROUP}/${device}/cmd`;
+    client.publish(topic, JSON.stringify(command), { qos: 1 });
+    return topic;
+  }
+
+  return { client, publishCommand };
 }

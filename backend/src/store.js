@@ -6,8 +6,12 @@ export const nowSeconds = () => Math.floor(Date.now() / 1000);
 /** Three missed readings: the box publishes every 5 s. */
 const OfflineAfterSeconds = 15;
 
-/** Used until the device gets thresholds of its own. */
-const DefaultThresholds = { tMin: 2, tMax: 8, hMin: null, hMax: null, holdMinutes: 10 };
+/**
+ * Greenhouse, tomato. Below 12 C growth stops, above 30 C pollination fails;
+ * above 85 % humidity mildew sets in. Twenty minutes of hold because the pump
+ * costs more to run for nothing than an alert costs to miss by a few minutes.
+ */
+const DefaultThresholds = { tMin: 12, tMax: 30, hMin: 60, hMax: 85, holdMinutes: 20 };
 
 const statements = {
   insertMeasurement: db.prepare(`
@@ -16,13 +20,17 @@ const statements = {
   `),
 
   // One row per device: the first message creates it, the next ones refresh it.
-  // last_seen never moves backwards, so a late message cannot rewrite history.
+  // A null last_seen leaves the stored one alone — a retained message is the
+  // broker talking, not the box, and must not pass for a sign of life.
   upsertDevice: db.prepare(`
     INSERT INTO devices (id, group_name, status, last_seen)
     VALUES (:id, :group, :status, :lastSeen)
     ON CONFLICT(id) DO UPDATE SET
       status    = excluded.status,
-      last_seen = MAX(excluded.last_seen, COALESCE(devices.last_seen, 0))
+      last_seen = CASE
+                    WHEN excluded.last_seen IS NULL THEN devices.last_seen
+                    ELSE MAX(excluded.last_seen, COALESCE(devices.last_seen, 0))
+                  END
   `),
 
   insertEvent: db.prepare(`
@@ -42,7 +50,7 @@ const statements = {
     ORDER BY id
   `),
 
-  getDevice: db.prepare(`SELECT id FROM devices WHERE id = :id`),
+  getDevice: db.prepare(`SELECT id, status FROM devices WHERE id = :id`),
 
   rawMeasurements: db.prepare(`
     SELECT ts, t, h
@@ -123,15 +131,27 @@ export function recordMeasurement(device, group, data) {
   return { device, ts, t, h };
 }
 
-export function recordStatus(device, group, status) {
+export function recordStatus(device, group, status, { retained = false } = {}) {
   const normalized = String(status).trim().toLowerCase();
   if (normalized !== 'online' && normalized !== 'offline') return null;
 
+  const previous = statements.getDevice.get({ id: device })?.status;
   const ts = nowSeconds();
-  statements.upsertDevice.run({ id: device, group, status: normalized, lastSeen: ts });
-  recordEvent(device, ts, 'status', { status: normalized });
 
-  return { device, ts, status: normalized };
+  statements.upsertDevice.run({
+    id: device,
+    group,
+    status: normalized,
+    // A replayed message says nothing about now.
+    lastSeen: retained ? null : ts,
+  });
+
+  // A repeated status is not news: the broker replays its retained message on
+  // every reconnect. Only a transition belongs in the journal.
+  const changed = previous !== normalized;
+  if (changed) recordEvent(device, ts, 'status', { status: normalized });
+
+  return { device, ts, status: normalized, changed };
 }
 
 export function recordEvent(device, ts, type, payload) {
