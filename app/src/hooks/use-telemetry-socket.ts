@@ -27,8 +27,8 @@ async function loadRecent() {
 }
 
 /**
- * Keeps the backend WebSocket open only while the app is in the foreground,
- * exactly like the accelerometer. Mount it once, at the root of the app.
+ * Keeps the backend WebSocket open only while the app is in the foreground.
+ * Mount it once, at the root of the app.
  */
 export function useTelemetrySocket() {
   const appState = useSensorStore((state) => state.appState);

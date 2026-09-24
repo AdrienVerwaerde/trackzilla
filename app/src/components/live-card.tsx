@@ -125,7 +125,7 @@ export function LiveCard() {
       ))}
 
       <Pressable onPress={toggleLed} disabled={sending || connection !== 'open'}>
-        <ThemedView type="backgroundSelected" style={styles.ledButton}>
+        <ThemedView type="backgroundButton" style={styles.ledButton}>
           {sending ? (
             <ActivityIndicator size="small" />
           ) : (

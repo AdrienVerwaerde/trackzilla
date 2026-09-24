@@ -1,4 +1,4 @@
-# Trackzilla — Projet Sentinelle
+# Potageek — Projet Sentinelle
 
 Capteur ESP32 → broker MQTT → **backend** (Node, SQLite) → **app** (Expo).
 
