@@ -3,7 +3,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { create } from 'zustand';
 
 /** Grows as new sensors are added (location, …). */
-export type LogSource = 'lifecycle' | 'accelerometer' | 'battery';
+export type LogSource = 'lifecycle' | 'accelerometer' | 'battery' | 'telemetry';
 
 export type LogEvent = {
   id: number;
