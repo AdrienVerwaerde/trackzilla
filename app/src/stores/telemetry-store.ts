@@ -6,8 +6,10 @@ import type { Device, DeviceStatus, Measurement, SocketEvent, ThresholdKind } fr
 import { useSensorStore } from '@/stores/sensor-store';
 import { ThresholdLabels } from '@/utils/format';
 
-/** Length of the dashboard's sliding window, in seconds. */
-export const LiveWindowSeconds = 10 * 60;
+/** Lengths of the dashboard's sliding window the user can pick, in seconds. */
+export const LiveWindows = [10 * 60, 60 * 60, 3 * 60 * 60] as const;
+
+export type LiveWindow = (typeof LiveWindows)[number];
 
 export type BackendConnection =
   /** Socket not opened yet, or closed on purpose (app in background). */
@@ -31,7 +33,9 @@ type TelemetryState = {
   deviceStatus: DeviceStatus | 'unknown';
   /** Epoch seconds of the device's last activity. */
   lastSeen: number | null;
-  /** Oldest first, deduplicated by `ts`, trimmed to `LiveWindowSeconds`. */
+  /** Length of the dashboard's sliding window. */
+  windowSeconds: LiveWindow;
+  /** Oldest first, deduplicated by `ts`, trimmed to `windowSeconds`. */
   measurements: Measurement[];
   /**
    * Most recent measurement, kept even once it leaves the window: the
@@ -42,6 +46,8 @@ type TelemetryState = {
 
   setConnection: (connection: BackendConnection) => void;
   setDevice: (device: Device) => void;
+  /** Shrinking trims at once; growing needs a REST reload (the socket hook does it). */
+  setWindowSeconds: (windowSeconds: LiveWindow) => void;
   /** Merges measurements from REST or the socket, in any order. */
   mergeMeasurements: (incoming: Measurement[]) => void;
   handleEvent: (event: SocketEvent) => void;
@@ -59,6 +65,7 @@ function log(message: string) {
 export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   deviceId: DeviceId,
   connection: 'idle',
+  windowSeconds: LiveWindows[0],
   deviceStatus: 'unknown',
   lastSeen: null,
   measurements: [],
@@ -78,16 +85,21 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
     set({ deviceStatus: device.status, lastSeen: device.lastSeen });
   },
 
+  setWindowSeconds: (windowSeconds) => {
+    const since = nowSeconds() - windowSeconds;
+    set((state) => ({ windowSeconds, measurements: state.measurements.filter((m) => m.ts >= since) }));
+  },
+
   mergeMeasurements: (incoming) => {
     if (incoming.length === 0) return;
 
-    const { measurements, last, lastSeen } = get();
+    const { measurements, last, lastSeen, windowSeconds } = get();
     // Keyed by ts: a measurement received by REST and again by the socket
     // (reload after background) must appear once.
     const byTs = new Map(measurements.map((m) => [m.ts, m]));
     for (const m of incoming) byTs.set(m.ts, m);
 
-    const since = nowSeconds() - LiveWindowSeconds;
+    const since = nowSeconds() - windowSeconds;
     const merged = [...byTs.values()].filter((m) => m.ts >= since).sort((a, b) => a.ts - b.ts);
 
     const newest = incoming.reduce((a, b) => (b.ts > a.ts ? b : a));

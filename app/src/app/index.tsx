@@ -42,7 +42,7 @@ export default function HomeScreen() {
             lastEvents.map((event) => <LogRow key={event.id} event={event} />)
           )}
 
-          <Link href="/dashboard" asChild>
+          <Link href="/journal" asChild>
             <Pressable style={({ pressed }) => pressed && styles.pressed}>
               <ThemedView type="backgroundElement" style={styles.seeMoreButton}>
                 <ThemedText type="small" style={{ color: '#eaeaea' }}>

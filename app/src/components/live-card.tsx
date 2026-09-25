@@ -1,3 +1,4 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
@@ -8,7 +9,8 @@ import { ThemedView } from './themed-view';
 import { nowSeconds, sendCommand } from '@/api/client';
 import type { ThresholdKind } from '@/api/types';
 import { Spacing } from '@/constants/theme';
-import { type ActiveAlert, LiveWindowSeconds, useTelemetryStore } from '@/stores/telemetry-store';
+import { useTheme } from '@/hooks/use-theme';
+import { type ActiveAlert, type LiveWindow, LiveWindows, useTelemetryStore } from '@/stores/telemetry-store';
 import { formatTime, ThresholdLabels } from '@/utils/format';
 
 const LiveColor = '#00ff88';
@@ -20,6 +22,15 @@ const WaitingColor = '#8e8e93';
 const ClockTickMs = 15_000;
 
 type Indicator = { color: string; label: string };
+
+/** Size of the pumpkin behind each window chip: wide enough to hold "10 min". */
+const PumpkinSize = 64;
+
+const WindowLabels: Record<LiveWindow, string> = {
+  600: '10 min',
+  3600: '1 h',
+  10800: '3 h',
+};
 
 /** Comma as the decimal separator, one decimal: "22,4". */
 function formatValue(value: number | null) {
@@ -53,7 +64,10 @@ export function LiveCard() {
   const last = useTelemetryStore((state) => state.last);
   const alerts = useTelemetryStore((state) => state.alerts);
   const measurements = useTelemetryStore((state) => state.measurements);
+  const windowSeconds = useTelemetryStore((state) => state.windowSeconds);
+  const setWindowSeconds = useTelemetryStore((state) => state.setWindowSeconds);
   const now = useNowSeconds();
+  const theme = useTheme();
 
   // The backend never reports the LED state: this is the last order sent.
   const [led, setLed] = useState(false);
@@ -80,7 +94,7 @@ export function LiveCard() {
   // The window ends at the newest reading, so the curve slides one step per
   // measurement instead of jumping on a timer.
   const windowEnd = last?.ts ?? now;
-  const windowStart = windowEnd - LiveWindowSeconds;
+  const windowStart = windowEnd - windowSeconds;
   // `alert_cleared` deletes the key, so every entry left is a real alert.
   const activeAlerts = Object.entries(alerts) as [ThresholdKind, ActiveAlert][];
 
@@ -118,12 +132,39 @@ export function LiveCard() {
         </ThemedText>
       )}
 
+      <View style={styles.chips}>
+        {LiveWindows.map((window) => {
+          const selected = window === windowSeconds;
+          return (
+            <Pressable
+              key={window}
+              onPress={() => setWindowSeconds(window)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}>
+              {/* The pumpkin is the chip's shape: the label sits centered on top of it. */}
+              <View style={styles.chip}>
+                <MaterialCommunityIcons
+                  name="pumpkin"
+                  size={PumpkinSize}
+                  color={selected ? theme.backgroundButton : theme.backgroundSelected}
+                  style={styles.pumpkin}
+                />
+                <ThemedText type={selected ? 'smallBold' : 'small'} style={styles.chipLabel}>
+                  {WindowLabels[window]}
+                </ThemedText>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <LiveChart
         title="Température"
         unit="°C"
         points={measurements.map((m) => ({ ts: m.ts, value: m.t }))}
         from={windowStart}
         to={windowEnd}
+        windowLabel={`-${WindowLabels[windowSeconds]}`}
       />
       <LiveChart
         title="Humidité"
@@ -131,6 +172,7 @@ export function LiveCard() {
         points={measurements.map((m) => ({ ts: m.ts, value: m.h }))}
         from={windowStart}
         to={windowEnd}
+        windowLabel={`-${WindowLabels[windowSeconds]}`}
       />
 
       {activeAlerts.map(([kind, alert]) => (
@@ -194,6 +236,24 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
+  },
+  chips: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  chip: {
+    width: PumpkinSize,
+    height: PumpkinSize,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pumpkin: {
+    position: 'absolute',
+  },
+  chipLabel: {
+    // The pumpkin's body sits below its stem: nudge the label onto the body.
+    marginTop: Spacing.two,
+    fontSize: 12,
   },
   ledButton: {
     alignItems: 'center',
