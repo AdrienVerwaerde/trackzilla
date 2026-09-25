@@ -17,6 +17,8 @@ type LiveChartProps = {
   /** Window bounds in epoch seconds. */
   from: number;
   to: number;
+  /** Left end of the time axis, e.g. "-10 min". */
+  windowLabel: string;
 };
 
 const Height = 72;
@@ -37,7 +39,7 @@ function formatValue(value: number) {
  * One series over a fixed time window. Temperature and humidity get one chart
  * each: two units on one plot would need two y-axes, which misleads.
  */
-export function LiveChart({ title, unit, points, from, to }: LiveChartProps) {
+export function LiveChart({ title, unit, points, from, to, windowLabel }: LiveChartProps) {
   const theme = useTheme();
   const [width, setWidth] = useState(0);
   const [touchedTs, setTouchedTs] = useState<number | null>(null);
@@ -133,14 +135,14 @@ export function LiveChart({ title, unit, points, from, to }: LiveChartProps) {
           </Svg>
         ) : (
           <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-            Pas encore de mesure sur les 10 dernières minutes
+            Pas encore de mesure sur cette période
           </ThemedText>
         )}
       </View>
 
       <View style={styles.header}>
         <ThemedText type="small" themeColor="textSecondary">
-          -10 min
+          {windowLabel}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {formatTime(to * 1000)}

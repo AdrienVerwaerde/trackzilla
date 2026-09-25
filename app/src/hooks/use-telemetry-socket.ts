@@ -4,14 +4,14 @@ import { getDevices, getMeasurements, nowSeconds } from '@/api/client';
 import { WsUrl } from '@/api/config';
 import type { SocketEvent } from '@/api/types';
 import { useSensorStore } from '@/stores/sensor-store';
-import { LiveWindowSeconds, useTelemetryStore } from '@/stores/telemetry-store';
+import { useTelemetryStore } from '@/stores/telemetry-store';
 
 /** Delay before trying the backend again after the socket dropped. */
 const RetryDelayMs = 3000;
 
 /** Fills the sliding window from REST: on open, and after every gap. */
 async function loadRecent() {
-  const { deviceId, setDevice, mergeMeasurements } = useTelemetryStore.getState();
+  const { deviceId, windowSeconds, setDevice, mergeMeasurements } = useTelemetryStore.getState();
 
   try {
     const device = (await getDevices()).find((d) => d.id === deviceId);
@@ -20,7 +20,7 @@ async function loadRecent() {
     if (!device) return;
 
     setDevice(device);
-    mergeMeasurements(await getMeasurements(deviceId, { from: nowSeconds() - LiveWindowSeconds }));
+    mergeMeasurements(await getMeasurements(deviceId, { from: nowSeconds() - windowSeconds }));
   } catch (error) {
     console.warn('[telemetry] REST reload failed', error);
   }
@@ -32,6 +32,13 @@ async function loadRecent() {
  */
 export function useTelemetrySocket() {
   const appState = useSensorStore((state) => state.appState);
+  const windowSeconds = useTelemetryStore((state) => state.windowSeconds);
+
+  // A wider window needs older readings the store never kept. While the socket
+  // is closed there is nothing to do: its `onopen` reloads the whole window.
+  useEffect(() => {
+    if (useTelemetryStore.getState().connection === 'open') loadRecent();
+  }, [windowSeconds]);
 
   useEffect(() => {
     const { setConnection, handleEvent } = useTelemetryStore.getState();
