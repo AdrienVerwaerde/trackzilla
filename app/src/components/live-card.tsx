@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import { LiveChart } from './live-chart';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
 import { nowSeconds, sendCommand } from '@/api/client';
 import type { ThresholdKind } from '@/api/types';
 import { Spacing } from '@/constants/theme';
-import { type ActiveAlert, useTelemetryStore } from '@/stores/telemetry-store';
+import { type ActiveAlert, LiveWindowSeconds, useTelemetryStore } from '@/stores/telemetry-store';
 import { formatTime } from '@/utils/format';
 
 const LiveColor = '#00ff88';
@@ -51,6 +52,7 @@ export function LiveCard() {
   const lastSeen = useTelemetryStore((state) => state.lastSeen);
   const last = useTelemetryStore((state) => state.last);
   const alerts = useTelemetryStore((state) => state.alerts);
+  const measurements = useTelemetryStore((state) => state.measurements);
   const now = useNowSeconds();
 
   // The backend never reports the LED state: this is the last order sent.
@@ -74,6 +76,11 @@ export function LiveCard() {
   }
 
   const isLive = connection === 'open' && deviceStatus === 'online';
+
+  // The window ends at the newest reading, so the curve slides one step per
+  // measurement instead of jumping on a timer.
+  const windowEnd = last?.ts ?? now;
+  const windowStart = windowEnd - LiveWindowSeconds;
   // `alert_cleared` deletes the key, so every entry left is a real alert.
   const activeAlerts = Object.entries(alerts) as [ThresholdKind, ActiveAlert][];
 
@@ -104,19 +111,27 @@ export function LiveCard() {
         </ThemedText>
       </View>
 
-      <View style={[styles.values, !isLive && styles.stale]}>
-        <ThemedText type="title">{formatValue(last?.t ?? null)} °C</ThemedText>
-        <ThemedText type="subtitle" themeColor="textSecondary">
-          {formatValue(last?.h ?? null)} %
-        </ThemedText>
-      </View>
-
       {last && (
         <ThemedText type="small" themeColor="textSecondary">
           {/* ts is in seconds, formatTime expects milliseconds. */}
           {isLive ? 'Mesure' : 'Dernière mesure'} à {formatTime(last.ts * 1000)}
         </ThemedText>
       )}
+
+      <LiveChart
+        title="Température"
+        unit="°C"
+        points={measurements.map((m) => ({ ts: m.ts, value: m.t }))}
+        from={windowStart}
+        to={windowEnd}
+      />
+      <LiveChart
+        title="Humidité"
+        unit="%"
+        points={measurements.map((m) => ({ ts: m.ts, value: m.h }))}
+        from={windowStart}
+        to={windowEnd}
+      />
 
       {activeAlerts.map(([kind, alert]) => (
         <ThemedText key={kind} type="small" style={styles.alert}>
