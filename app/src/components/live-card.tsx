@@ -9,7 +9,7 @@ import { nowSeconds, sendCommand } from '@/api/client';
 import type { ThresholdKind } from '@/api/types';
 import { Spacing } from '@/constants/theme';
 import { type ActiveAlert, LiveWindowSeconds, useTelemetryStore } from '@/stores/telemetry-store';
-import { formatTime } from '@/utils/format';
+import { formatTime, ThresholdLabels } from '@/utils/format';
 
 const LiveColor = '#00ff88';
 const WarningColor = '#ff6200';
@@ -135,7 +135,7 @@ export function LiveCard() {
 
       {activeAlerts.map(([kind, alert]) => (
         <ThemedText key={kind} type="small" style={styles.alert}>
-          Alerte {kind} : {formatValue(alert.value)} (seuil {formatValue(alert.threshold)})
+          Alerte {ThresholdLabels[kind]} : {formatValue(alert.value)} (seuil {formatValue(alert.threshold)})
         </ThemedText>
       ))}
 
@@ -189,6 +189,11 @@ const styles = StyleSheet.create({
   },
   alert: {
     color: OfflineColor,
+    fontWeight: 'bold',
+    backgroundColor: '#eaeaea',
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
   },
   ledButton: {
     alignItems: 'center',
