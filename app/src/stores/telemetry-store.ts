@@ -4,6 +4,7 @@ import { nowSeconds } from '@/api/client';
 import { DeviceId } from '@/api/config';
 import type { Device, DeviceStatus, Measurement, SocketEvent, ThresholdKind } from '@/api/types';
 import { useSensorStore } from '@/stores/sensor-store';
+import { ThresholdLabels } from '@/utils/format';
 
 /** Length of the dashboard's sliding window, in seconds. */
 export const LiveWindowSeconds = 10 * 60;
@@ -118,7 +119,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       case 'alert': {
         const { kind, ts, value, threshold } = event;
         set((state) => ({ alerts: { ...state.alerts, [kind]: { ts, value, threshold } } }));
-        log(`Alerte ${kind} : ${value} (seuil ${threshold})`);
+        log(`Alerte ${ThresholdLabels[kind]} : ${value} (seuil ${threshold})`);
         break;
       }
 
@@ -127,7 +128,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
           const { [event.kind]: _cleared, ...alerts } = state.alerts;
           return { alerts };
         });
-        log(`Retour à la normale : ${event.kind}`);
+        log(`Retour à la normale : ${ThresholdLabels[event.kind]}`);
         break;
     }
   },
