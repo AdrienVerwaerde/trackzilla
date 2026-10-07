@@ -7,6 +7,12 @@ export const nowSeconds = () => Math.floor(Date.now() / 1000);
 const OfflineAfterSeconds = 15;
 
 /**
+ * An online box answers in about a second. Thirty leaves room for a slow
+ * broker without letting the app show "en attente" forever.
+ */
+const CommandTimeoutSeconds = 30;
+
+/**
  * Greenhouse, tomato. Below 12 C growth stops, above 30 C pollination fails;
  * above 85 % humidity mildew sets in. Twenty minutes of hold because the pump
  * costs more to run for nothing than an alert costs to miss by a few minutes.
@@ -118,6 +124,14 @@ const statements = {
   `),
 
   setCommandStatus: db.prepare(`UPDATE commands SET status = :status WHERE id = :id`),
+
+  // Every command the box never answered in time, whatever its device.
+  staleCommands: db.prepare(`
+    SELECT id, device
+    FROM commands
+    WHERE status = 'sent' AND created_at < :before
+    ORDER BY created_at, rowid
+  `),
 
   // Catching up after a cut: everything since the last event the app holds,
   // oldest first, so the page it gets back has no hole in the middle.
@@ -233,6 +247,22 @@ export function recordLedState(device, led, { retained = false } = {}) {
   recordEvent(device, nowSeconds(), 'command_status', { id: pending.id, status: 'acked' });
 
   return { id: pending.id, device, status: 'acked' };
+}
+
+/**
+ * Fails the commands the box never confirmed, and returns them so the caller
+ * can tell the app. A later state report no longer acks them: only `sent`
+ * commands are looked at.
+ */
+export function expireCommands() {
+  const now = nowSeconds();
+  const stale = statements.staleCommands.all({ before: now - CommandTimeoutSeconds });
+
+  return stale.map(({ id, device }) => {
+    statements.setCommandStatus.run({ id, status: 'failed' });
+    recordEvent(device, now, 'command_status', { id, status: 'failed', reason: 'timeout' });
+    return { id, device, status: 'failed', reason: 'timeout' };
+  });
 }
 
 export const deviceExists = (id) => statements.getDevice.get({ id }) !== undefined;

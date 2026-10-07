@@ -2,7 +2,7 @@ import { evaluate } from './alerts.js';
 import { createHub } from './hub.js';
 import { connectBroker } from './mqtt.js';
 import { createServer } from './server.js';
-import { recordLedState, recordMeasurement, recordStatus } from './store.js';
+import { expireCommands, recordLedState, recordMeasurement, recordStatus } from './store.js';
 
 const group = process.env.MQTT_GROUP;
 const port = Number(process.env.PORT ?? 3000);
@@ -22,6 +22,18 @@ const httpServer = createServer({ publishCommand: broker.publishCommand }).liste
 );
 
 const hub = createHub(httpServer);
+
+/** How often unanswered commands are looked for. */
+const CommandSweepMs = 5000;
+
+// No box message ever says "I did not get it": only the clock can fail a
+// command, so the app stops waiting on a LED that will never answer.
+setInterval(() => {
+  for (const failed of expireCommands()) {
+    hub.broadcast('command_status', failed);
+    console.log(`[cmd] ${failed.id} failed (no state from ${failed.device})`);
+  }
+}, CommandSweepMs);
 
 function onTelemetry(device, data) {
   const measurement = recordMeasurement(device, group, data);
