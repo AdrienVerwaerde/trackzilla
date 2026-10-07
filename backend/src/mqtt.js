@@ -8,7 +8,7 @@ function parseTopic(topic) {
   return { device, channel };
 }
 
-export function connectBroker({ onTelemetry, onStatus }) {
+export function connectBroker({ onTelemetry, onStatus, onState }) {
   const client = mqtt.connect(MQTT_URL, {
     username: MQTT_USERNAME,
     password: MQTT_PASSWORD,
@@ -23,6 +23,7 @@ export function connectBroker({ onTelemetry, onStatus }) {
     const topics = [
       `sentinelle/${MQTT_GROUP}/+/telemetry`,
       `sentinelle/${MQTT_GROUP}/+/status`,
+      `sentinelle/${MQTT_GROUP}/+/state`,
     ];
 
     client.subscribe(topics, (error) => {
@@ -53,6 +54,7 @@ export function connectBroker({ onTelemetry, onStatus }) {
     }
 
     if (channel === 'telemetry') onTelemetry(device, data);
+    if (channel === 'state') onState(device, data, { retained: packet.retain });
   });
 
   client.on('error', (error) => console.error('[mqtt]', error.message));

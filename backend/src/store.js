@@ -7,6 +7,12 @@ export const nowSeconds = () => Math.floor(Date.now() / 1000);
 const OfflineAfterSeconds = 15;
 
 /**
+ * An online box answers in about a second. Thirty leaves room for a slow
+ * broker without letting the app show "en attente" forever.
+ */
+const CommandTimeoutSeconds = 30;
+
+/**
  * Greenhouse, tomato. Below 12 C growth stops, above 30 C pollination fails;
  * above 85 % humidity mildew sets in. Twenty minutes of hold because the pump
  * costs more to run for nothing than an alert costs to miss by a few minutes.
@@ -45,7 +51,8 @@ const statements = {
            group_name AS "group",
            CASE WHEN :now - COALESCE(last_seen, 0) > :offlineAfter
                 THEN 'offline' ELSE status END AS status,
-           last_seen AS "lastSeen"
+           last_seen AS "lastSeen",
+           led
     FROM devices
     ORDER BY id
   `),
@@ -94,6 +101,62 @@ const statements = {
       h_min        = excluded.h_min,
       h_max        = excluded.h_max,
       hold_minutes = excluded.hold_minutes
+  `),
+
+  // DO NOTHING rather than an error: a second delivery of the same id is the
+  // normal case of a replay, not a fault.
+  insertCommand: db.prepare(`
+    INSERT INTO commands (id, device, led, created_at)
+    VALUES (:id, :device, :led, :createdAt)
+    ON CONFLICT(id) DO NOTHING
+  `),
+
+  saveLed: db.prepare(`UPDATE devices SET led = :led WHERE id = :id`),
+
+  // Newest first: an older command still waiting was overtaken by this one,
+  // and the box only ever reports where it ended up.
+  latestPendingCommand: db.prepare(`
+    SELECT id, led
+    FROM commands
+    WHERE device = :device AND status = 'sent'
+    ORDER BY created_at DESC, rowid DESC
+    LIMIT 1
+  `),
+
+  setCommandStatus: db.prepare(`UPDATE commands SET status = :status WHERE id = :id`),
+
+  // Every command the box never answered in time, whatever its device.
+  staleCommands: db.prepare(`
+    SELECT id, device
+    FROM commands
+    WHERE status = 'sent' AND created_at < :before
+    ORDER BY created_at, rowid
+  `),
+
+  // Catching up after a cut: everything since the last event the app holds,
+  // oldest first, so the page it gets back has no hole in the middle.
+  // node:sqlite binds numbers as REAL, hence the CAST for LIMIT.
+  eventsSince: db.prepare(`
+    SELECT id, ts, type, payload
+    FROM events
+    WHERE device = :device AND ts BETWEEN :from AND :to
+    ORDER BY ts, id
+    LIMIT CAST(:limit AS INTEGER)
+  `),
+
+  // First load: the most recent page, read newest first and flipped in JS.
+  latestEvents: db.prepare(`
+    SELECT id, ts, type, payload
+    FROM events
+    WHERE device = :device AND ts <= :to
+    ORDER BY ts DESC, id DESC
+    LIMIT CAST(:limit AS INTEGER)
+  `),
+
+  getCommand: db.prepare(`
+    SELECT id, device, led, status, created_at AS "createdAt"
+    FROM commands
+    WHERE id = :id
   `),
 };
 
@@ -161,7 +224,45 @@ export function recordEvent(device, ts, type, payload) {
 export function listDevices() {
   return statements.listDevices
     .all({ now: nowSeconds(), offlineAfter: OfflineAfterSeconds })
-    .map(plain);
+    .map((row) => ({ ...row, led: row.led === null ? null : row.led === 1 }));
+}
+
+/**
+ * Stores the LED state the box reports, and returns the command it confirms,
+ * or null when there is nothing to confirm.
+ *
+ * Only the latest pending command is acked, and only if the box landed on the
+ * state it asked for: the boot message (LED off) must not confirm a pending
+ * `led: true`. A retained state is the broker replaying the last known LED on
+ * reconnect: worth storing, but it is not the box answering a command.
+ */
+export function recordLedState(device, led, { retained = false } = {}) {
+  statements.saveLed.run({ id: device, led: led ? 1 : 0 });
+  if (retained) return null;
+
+  const pending = statements.latestPendingCommand.get({ device });
+  if (!pending || (pending.led === 1) !== led) return null;
+
+  statements.setCommandStatus.run({ id: pending.id, status: 'acked' });
+  recordEvent(device, nowSeconds(), 'command_status', { id: pending.id, status: 'acked' });
+
+  return { id: pending.id, device, status: 'acked' };
+}
+
+/**
+ * Fails the commands the box never confirmed, and returns them so the caller
+ * can tell the app. A later state report no longer acks them: only `sent`
+ * commands are looked at.
+ */
+export function expireCommands() {
+  const now = nowSeconds();
+  const stale = statements.staleCommands.all({ before: now - CommandTimeoutSeconds });
+
+  return stale.map(({ id, device }) => {
+    statements.setCommandStatus.run({ id, status: 'failed' });
+    recordEvent(device, now, 'command_status', { id, status: 'failed', reason: 'timeout' });
+    return { id, device, status: 'failed', reason: 'timeout' };
+  });
 }
 
 export const deviceExists = (id) => statements.getDevice.get({ id }) !== undefined;
@@ -175,6 +276,27 @@ export function getMeasurements({ device, from, to, step }) {
   return rows.map(plain);
 }
 
+/**
+ * The journal, oldest first. With `from`, the events since then (inclusive:
+ * the app dedupes on `eventId`); without, the `limit` most recent ones.
+ */
+export function getEvents({ device, from, to, limit }) {
+  const rows =
+    from === undefined
+      ? statements.latestEvents.all({ device, to, limit }).reverse()
+      : statements.eventsSince.all({ device, from, to, limit });
+
+  // The payload sits flat beside the row, so an event reads like its WS twin.
+  // `eventId`, not `id`: a command's payload already carries the command id.
+  return rows.map(({ id, ts, type, payload }) => ({
+    ...JSON.parse(payload ?? '{}'),
+    eventId: id,
+    device,
+    ts,
+    type,
+  }));
+}
+
 export function getThresholds(device) {
   return plain(statements.getThresholds.get({ device })) ?? { ...DefaultThresholds };
 }
@@ -182,4 +304,22 @@ export function getThresholds(device) {
 export function saveThresholds(device, thresholds) {
   statements.saveThresholds.run({ device, ...thresholds });
   return getThresholds(device);
+}
+
+/**
+ * Remembers a command by its id. `created` is false when the id was already
+ * known: the caller must then not publish it again. The insert and the check
+ * are one statement, so two requests racing on the same id cannot both win.
+ */
+export function recordCommand({ id, device, led }) {
+  const { changes } = statements.insertCommand.run({
+    id,
+    device,
+    // node:sqlite has no boolean: SQLite stores it as 0 or 1.
+    led: led ? 1 : 0,
+    createdAt: nowSeconds(),
+  });
+
+  const row = statements.getCommand.get({ id });
+  return { created: changes > 0, command: { ...row, led: row.led === 1 } };
 }
