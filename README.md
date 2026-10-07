@@ -27,6 +27,8 @@ GET  /devices                                   → [{ id, group, status, lastSe
 GET  /devices/:id/measurements?from=&to=&step=  → [{ ts, t, h }]
 GET  /devices/:id/thresholds                    → { tMin, tMax, hMin, hMax, holdMinutes }
 PUT  /devices/:id/thresholds                    ← même objet
+     → 400 si : t hors [-10, 50] °C · h hors [0, 100] % · tMin ≥ tMax · hMin ≥ hMax
+                holdMinutes hors [0, 1440] · une borne à null n'est pas surveillée
 GET  /devices/:id/events?from=&to=&limit=       → [{ eventId, device, ts, type, ...payload }]
      du plus ancien au plus récent · sans from : les `limit` derniers (200 par défaut, 1000 max)
      avec from : depuis from inclus, dédoublonner sur eventId
