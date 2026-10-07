@@ -23,16 +23,21 @@ Dans `app/.env`, `EXPO_PUBLIC_API_URL` doit pointer vers l'**IP du portable** su
 ## Contrat d'API
 
 ```
-GET  /devices                                   → [{ id, group, status, lastSeen }]
+GET  /devices                                   → [{ id, group, status, lastSeen, led }]
 GET  /devices/:id/measurements?from=&to=&step=  → [{ ts, t, h }]
 GET  /devices/:id/thresholds                    → { tMin, tMax, hMin, hMax, holdMinutes }
 PUT  /devices/:id/thresholds                    ← même objet
-POST /devices/:id/commands                      ← { "led": true } → 202 { "sent": true }
+POST /devices/:id/commands                      ← { "id": "c-7f3a…", "led": true }
+     → 202 { "id", "status": "sent" }   première fois : publié sur …/cmd
+     → 200 { "id", "status" }           id déjà vu : rien n'est republié
+     → 409                              id déjà vu pour un autre device ou état
 
 WS   measurement    { device, ts, t, h }
      alert          { device, ts, kind, value, threshold }
      alert_cleared  { device, ts, kind }
      device_status  { device, status }
+     device_state   { device, led }                 état réel publié par le boîtier
+     command_status { id, device, status: "acked" } la dernière commande en attente est confirmée
 ```
 
 Tous les `ts` sont en secondes epoch, UTC.

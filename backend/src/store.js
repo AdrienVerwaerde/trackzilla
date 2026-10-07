@@ -45,7 +45,8 @@ const statements = {
            group_name AS "group",
            CASE WHEN :now - COALESCE(last_seen, 0) > :offlineAfter
                 THEN 'offline' ELSE status END AS status,
-           last_seen AS "lastSeen"
+           last_seen AS "lastSeen",
+           led
     FROM devices
     ORDER BY id
   `),
@@ -94,6 +95,34 @@ const statements = {
       h_min        = excluded.h_min,
       h_max        = excluded.h_max,
       hold_minutes = excluded.hold_minutes
+  `),
+
+  // DO NOTHING rather than an error: a second delivery of the same id is the
+  // normal case of a replay, not a fault.
+  insertCommand: db.prepare(`
+    INSERT INTO commands (id, device, led, created_at)
+    VALUES (:id, :device, :led, :createdAt)
+    ON CONFLICT(id) DO NOTHING
+  `),
+
+  saveLed: db.prepare(`UPDATE devices SET led = :led WHERE id = :id`),
+
+  // Newest first: an older command still waiting was overtaken by this one,
+  // and the box only ever reports where it ended up.
+  latestPendingCommand: db.prepare(`
+    SELECT id, led
+    FROM commands
+    WHERE device = :device AND status = 'sent'
+    ORDER BY created_at DESC, rowid DESC
+    LIMIT 1
+  `),
+
+  setCommandStatus: db.prepare(`UPDATE commands SET status = :status WHERE id = :id`),
+
+  getCommand: db.prepare(`
+    SELECT id, device, led, status, created_at AS "createdAt"
+    FROM commands
+    WHERE id = :id
   `),
 };
 
@@ -161,7 +190,29 @@ export function recordEvent(device, ts, type, payload) {
 export function listDevices() {
   return statements.listDevices
     .all({ now: nowSeconds(), offlineAfter: OfflineAfterSeconds })
-    .map(plain);
+    .map((row) => ({ ...row, led: row.led === null ? null : row.led === 1 }));
+}
+
+/**
+ * Stores the LED state the box reports, and returns the command it confirms,
+ * or null when there is nothing to confirm.
+ *
+ * Only the latest pending command is acked, and only if the box landed on the
+ * state it asked for: the boot message (LED off) must not confirm a pending
+ * `led: true`. A retained state is the broker replaying the last known LED on
+ * reconnect: worth storing, but it is not the box answering a command.
+ */
+export function recordLedState(device, led, { retained = false } = {}) {
+  statements.saveLed.run({ id: device, led: led ? 1 : 0 });
+  if (retained) return null;
+
+  const pending = statements.latestPendingCommand.get({ device });
+  if (!pending || (pending.led === 1) !== led) return null;
+
+  statements.setCommandStatus.run({ id: pending.id, status: 'acked' });
+  recordEvent(device, nowSeconds(), 'command_status', { id: pending.id, status: 'acked' });
+
+  return { id: pending.id, device, status: 'acked' };
 }
 
 export const deviceExists = (id) => statements.getDevice.get({ id }) !== undefined;
@@ -182,4 +233,22 @@ export function getThresholds(device) {
 export function saveThresholds(device, thresholds) {
   statements.saveThresholds.run({ device, ...thresholds });
   return getThresholds(device);
+}
+
+/**
+ * Remembers a command by its id. `created` is false when the id was already
+ * known: the caller must then not publish it again. The insert and the check
+ * are one statement, so two requests racing on the same id cannot both win.
+ */
+export function recordCommand({ id, device, led }) {
+  const { changes } = statements.insertCommand.run({
+    id,
+    device,
+    // node:sqlite has no boolean: SQLite stores it as 0 or 1.
+    led: led ? 1 : 0,
+    createdAt: nowSeconds(),
+  });
+
+  const row = statements.getCommand.get({ id });
+  return { created: changes > 0, command: { ...row, led: row.led === 1 } };
 }

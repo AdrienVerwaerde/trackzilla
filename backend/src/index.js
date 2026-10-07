@@ -2,7 +2,7 @@ import { evaluate } from './alerts.js';
 import { createHub } from './hub.js';
 import { connectBroker } from './mqtt.js';
 import { createServer } from './server.js';
-import { recordMeasurement, recordStatus } from './store.js';
+import { recordLedState, recordMeasurement, recordStatus } from './store.js';
 
 const group = process.env.MQTT_GROUP;
 const port = Number(process.env.PORT ?? 3000);
@@ -12,7 +12,7 @@ const port = Number(process.env.PORT ?? 3000);
 // the HTTP server. The handlers below are function declarations, so they are
 // hoisted and may name `hub` before this file finishes running — and no MQTT
 // message can reach them until it does.
-const broker = connectBroker({ onTelemetry, onStatus });
+const broker = connectBroker({ onTelemetry, onStatus, onState });
 
 // 0.0.0.0, not localhost: the phone reaches the laptop over the shared network.
 const httpServer = createServer({ publishCommand: broker.publishCommand }).listen(
@@ -33,6 +33,20 @@ function onTelemetry(device, data) {
   for (const { type, ...payload } of evaluate(measurement)) {
     hub.broadcast(type, payload);
     console.log(`[${type}] ${device} ${payload.kind}`);
+  }
+}
+
+/** The box reports what its LED really does: the only proof a command worked. */
+function onState(device, data, { retained }) {
+  if (typeof data?.led !== 'boolean') return console.warn('[store] bad state', device, data);
+
+  const acked = recordLedState(device, data.led, { retained });
+  console.log(`[state] ${device} led=${data.led}${retained ? ' (retained)' : ''}`);
+  hub.broadcast('device_state', { device, led: data.led });
+
+  if (acked) {
+    hub.broadcast('command_status', acked);
+    console.log(`[cmd] ${acked.id} acked`);
   }
 }
 
