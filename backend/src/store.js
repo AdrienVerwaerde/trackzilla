@@ -119,6 +119,26 @@ const statements = {
 
   setCommandStatus: db.prepare(`UPDATE commands SET status = :status WHERE id = :id`),
 
+  // Catching up after a cut: everything since the last event the app holds,
+  // oldest first, so the page it gets back has no hole in the middle.
+  // node:sqlite binds numbers as REAL, hence the CAST for LIMIT.
+  eventsSince: db.prepare(`
+    SELECT id, ts, type, payload
+    FROM events
+    WHERE device = :device AND ts BETWEEN :from AND :to
+    ORDER BY ts, id
+    LIMIT CAST(:limit AS INTEGER)
+  `),
+
+  // First load: the most recent page, read newest first and flipped in JS.
+  latestEvents: db.prepare(`
+    SELECT id, ts, type, payload
+    FROM events
+    WHERE device = :device AND ts <= :to
+    ORDER BY ts DESC, id DESC
+    LIMIT CAST(:limit AS INTEGER)
+  `),
+
   getCommand: db.prepare(`
     SELECT id, device, led, status, created_at AS "createdAt"
     FROM commands
@@ -224,6 +244,27 @@ export function getMeasurements({ device, from, to, step }) {
     : statements.rawMeasurements.all({ device, from, to });
 
   return rows.map(plain);
+}
+
+/**
+ * The journal, oldest first. With `from`, the events since then (inclusive:
+ * the app dedupes on `eventId`); without, the `limit` most recent ones.
+ */
+export function getEvents({ device, from, to, limit }) {
+  const rows =
+    from === undefined
+      ? statements.latestEvents.all({ device, to, limit }).reverse()
+      : statements.eventsSince.all({ device, from, to, limit });
+
+  // The payload sits flat beside the row, so an event reads like its WS twin.
+  // `eventId`, not `id`: a command's payload already carries the command id.
+  return rows.map(({ id, ts, type, payload }) => ({
+    ...JSON.parse(payload ?? '{}'),
+    eventId: id,
+    device,
+    ts,
+    type,
+  }));
 }
 
 export function getThresholds(device) {

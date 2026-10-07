@@ -2,6 +2,7 @@ import express from 'express';
 
 import {
   deviceExists,
+  getEvents,
   getMeasurements,
   getThresholds,
   listDevices,
@@ -13,6 +14,10 @@ import {
 
 /** `from` absent means the last ten minutes. */
 const DefaultWindowSeconds = 600;
+
+/** A journal screen shows a few dozen rows; a page caps what one call costs. */
+const DefaultEventsLimit = 200;
+const MaxEventsLimit = 1000;
 
 const badRequest = (res, message) => res.status(400).json({ error: message });
 const notFound = (res) => res.status(404).json({ error: 'unknown device' });
@@ -58,6 +63,26 @@ export function createServer({ publishCommand }) {
     if (start > end) return badRequest(res, '`from` must not be after `to`');
 
     res.json(getMeasurements({ device, from: start, to: end, step }));
+  });
+
+  app.get('/devices/:id/events', (req, res) => {
+    const device = req.params.id;
+    if (!deviceExists(device)) return notFound(res);
+
+    const from = readInteger(req.query.from);
+    const to = readInteger(req.query.to);
+    const limit = readInteger(req.query.limit);
+
+    if (from === null) return badRequest(res, '`from` must be an epoch in seconds');
+    if (to === null) return badRequest(res, '`to` must be an epoch in seconds');
+    if (limit !== undefined && (limit === null || limit <= 0 || limit > MaxEventsLimit)) {
+      return badRequest(res, `\`limit\` must be an integer between 1 and ${MaxEventsLimit}`);
+    }
+
+    const end = to ?? nowSeconds();
+    if (from !== undefined && from > end) return badRequest(res, '`from` must not be after `to`');
+
+    res.json(getEvents({ device, from, to: end, limit: limit ?? DefaultEventsLimit }));
   });
 
   app.get('/devices/:id/thresholds', (req, res) => {

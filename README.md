@@ -27,6 +27,10 @@ GET  /devices                                   → [{ id, group, status, lastSe
 GET  /devices/:id/measurements?from=&to=&step=  → [{ ts, t, h }]
 GET  /devices/:id/thresholds                    → { tMin, tMax, hMin, hMax, holdMinutes }
 PUT  /devices/:id/thresholds                    ← même objet
+GET  /devices/:id/events?from=&to=&limit=       → [{ eventId, device, ts, type, ...payload }]
+     du plus ancien au plus récent · sans from : les `limit` derniers (200 par défaut, 1000 max)
+     avec from : depuis from inclus, dédoublonner sur eventId
+     type : alert | alert_cleared | status | command | command_status
 POST /devices/:id/commands                      ← { "id": "c-7f3a…", "led": true }
      → 202 { "id", "status": "sent" }   première fois : publié sur …/cmd
      → 200 { "id", "status" }           id déjà vu : rien n'est republié
