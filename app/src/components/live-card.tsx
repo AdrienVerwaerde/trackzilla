@@ -15,8 +15,8 @@ import { formatTime, ThresholdLabels } from '@/utils/format';
 
 const LiveColor = '#00ff88';
 const WarningColor = '#ff6200';
-const OfflineColor = '#ff3b30';
 const WaitingColor = '#8e8e93';
+const AlertColor = '#ff3b30';
 
 /** The indicator counts minutes: refreshing more often would change nothing. */
 const ClockTickMs = 15_000;
@@ -74,14 +74,11 @@ export function LiveCard() {
   const [sending, setSending] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
 
-  // Two levels: app ↔ backend first, then box ↔ broker. A green dot while the
-  // box has been unplugged for an hour would be a lie.
+  // Only the box ↔ broker level: whether the app itself reaches the backend is
+  // the banner's job, and saying it twice would read as two different faults.
+  // A green dot while the box has been unplugged for an hour would be a lie.
   let indicator: Indicator;
-  if (connection === 'lost') {
-    indicator = { color: OfflineColor, label: 'Vous êtes hors ligne' };
-  } else if (connection !== 'open') {
-    indicator = { color: WaitingColor, label: 'Connexion au backend…' };
-  } else if (deviceStatus === 'offline') {
+  if (deviceStatus === 'offline') {
     indicator = { color: WarningColor, label: `Capteur hors ligne${sinceLabel(lastSeen, now)}` };
   } else if (deviceStatus === 'online') {
     indicator = { color: LiveColor, label: 'En direct' };
@@ -230,7 +227,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   alert: {
-    color: OfflineColor,
+    color: AlertColor,
     fontWeight: 'bold',
     backgroundColor: '#eaeaea',
     borderRadius: Spacing.two,

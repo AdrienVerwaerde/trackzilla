@@ -29,6 +29,11 @@ type TelemetryState = {
   /** The device shown on the dashboard; events from other devices are ignored. */
   deviceId: string;
   connection: BackendConnection;
+  /**
+   * Epoch ms of the reconnection attempt the socket has scheduled, or null when
+   * none is pending. The banner counts down to it.
+   */
+  nextAttemptAt: number | null;
   /** `unknown` until `GET /devices` or a `device_status` event says otherwise. */
   deviceStatus: DeviceStatus | 'unknown';
   /** Epoch seconds of the device's last activity. */
@@ -45,6 +50,8 @@ type TelemetryState = {
   alerts: Partial<Record<ThresholdKind, ActiveAlert>>;
 
   setConnection: (connection: BackendConnection) => void;
+  /** Announced by the socket hook right after it schedules a retry. */
+  setNextAttemptAt: (nextAttemptAt: number | null) => void;
   setDevice: (device: Device) => void;
   /** Shrinking trims at once; growing needs a REST reload (the socket hook does it). */
   setWindowSeconds: (windowSeconds: LiveWindow) => void;
@@ -65,6 +72,7 @@ function log(message: string) {
 export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   deviceId: DeviceId,
   connection: 'idle',
+  nextAttemptAt: null,
   windowSeconds: LiveWindows[0],
   deviceStatus: 'unknown',
   lastSeen: null,
@@ -75,10 +83,14 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   setConnection: (connection) => {
     if (connection === get().connection) return;
 
-    set({ connection });
+    // Entering a new state voids the attempt the previous one had scheduled;
+    // the hook announces a fresh one when it schedules the next retry.
+    set({ connection, nextAttemptAt: null });
     const message = ConnectionMessages[connection];
     if (message) log(message);
   },
+
+  setNextAttemptAt: (nextAttemptAt) => set({ nextAttemptAt }),
 
   setDevice: (device) => {
     if (device.id !== get().deviceId) return;

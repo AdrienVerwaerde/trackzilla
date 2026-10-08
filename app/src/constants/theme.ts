@@ -80,8 +80,14 @@ export const SelectedTabColor = '#fe7f30';
  */
 export const BackgroundImageOpacity = 0.2;
 
-/** Space between the status bar and the top of each screen's content. */
-export const TopInset = Spacing.five;
+/**
+ * Space between the status bar and the top of each screen's content.
+ *
+ * The network banner floats over the screens rather than pushing them down, so
+ * this has to clear it on its own: one line of text and its padding come to 36,
+ * and the rest is the gap that keeps the bar from sitting on the content.
+ */
+export const TopInset = Spacing.six;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;

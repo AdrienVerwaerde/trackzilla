@@ -41,7 +41,7 @@ export function useTelemetrySocket() {
   }, [windowSeconds]);
 
   useEffect(() => {
-    const { setConnection, handleEvent } = useTelemetryStore.getState();
+    const { setConnection, handleEvent, setNextAttemptAt } = useTelemetryStore.getState();
 
     // No socket outside the foreground: nobody is looking at the curve.
     if (appState !== 'active') {
@@ -84,6 +84,9 @@ export function useTelemetrySocket() {
         if (cancelled) return;
 
         setConnection('lost');
+        // Announced before the timer starts, so the banner can say when the
+        // next attempt is due instead of only that one is coming.
+        setNextAttemptAt(Date.now() + RetryDelayMs);
         retry = setTimeout(connect, RetryDelayMs);
       };
     }
