@@ -1,15 +1,17 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { LiveChart } from './live-chart';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
-import { nowSeconds, sendCommand } from '@/api/client';
+import { nowSeconds } from '@/api/client';
 import type { DeviceStatus, ThresholdKind } from '@/api/types';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { enqueueCommand } from '@/services/command-queue';
+import { inFlightCommand, useCommandStore } from '@/stores/command-store';
 import { type ActiveAlert, type LiveWindow, LiveWindows, useTelemetryStore } from '@/stores/telemetry-store';
 import { formatTime, ThresholdLabels } from '@/utils/format';
 
@@ -75,10 +77,13 @@ export function LiveCard() {
   const now = useNowSeconds();
   const theme = useTheme();
 
-  // The backend never reports the LED state: this is the last order sent.
-  const [led, setLed] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [commandError, setCommandError] = useState<string | null>(null);
+  const commands = useCommandStore((state) => state.commands);
+  const confirmedLed = useCommandStore((state) => state.led);
+  const commandError = useCommandStore((state) => state.error);
+
+  // Optimistic: the queue's unfinished order wins over the box's last word.
+  const inFlight = inFlightCommand(commands);
+  const led = inFlight ? inFlight.led : (confirmedLed ?? false);
 
   // Only the box ↔ broker level: whether the app itself reaches the backend is
   // the banner's job, and saying it twice would read as two different faults.
@@ -107,20 +112,8 @@ export function LiveCard() {
   // `alert_cleared` deletes the key, so every entry left is a real alert.
   const activeAlerts = Object.entries(alerts) as [ThresholdKind, ActiveAlert][];
 
-  async function toggleLed() {
-    const next = !led;
-    setSending(true);
-    setCommandError(null);
-
-    try {
-      await sendCommand(deviceId, { led: next });
-      setLed(next);
-    } catch {
-      setCommandError('Commande non envoyée');
-    } finally {
-      setSending(false);
-    }
-  }
+  // No network check: queuing offline is the point.
+  const toggleLed = () => enqueueCommand(deviceId, !led);
 
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
@@ -196,12 +189,20 @@ export function LiveCard() {
         </ThemedText>
       ))}
 
-      <Pressable onPress={toggleLed} disabled={sending || connection !== 'open'}>
-        <ThemedView type="backgroundButton" style={styles.ledButton}>
-          {sending ? (
-            <ActivityIndicator size="small" />
-          ) : (
-            <ThemedText type="smallBold">{led ? 'ÉTEINDRE LA LED' : 'ALLUMER LA LED'}</ThemedText>
+      <Pressable
+        onPress={toggleLed}
+        accessibilityRole="button"
+        accessibilityLabel={`${led ? 'Éteindre' : 'Allumer'} la LED du potager`}
+        accessibilityHint={inFlight ? 'Commande en attente d’envoi' : undefined}>
+        {/* Dashed while unconfirmed: the wanted state, not the real one. */}
+        <ThemedView
+          type="backgroundButton"
+          style={[styles.ledButton, inFlight && styles.ledButtonPending]}>
+          <ThemedText type="smallBold">{led ? 'ÉTEINDRE LA LED' : 'ALLUMER LA LED'}</ThemedText>
+          {inFlight && (
+            <ThemedText type="small">
+              {inFlight.status === 'pending' ? 'en attente' : 'envoyée'}
+            </ThemedText>
           )}
         </ThemedView>
       </Pressable>
@@ -274,6 +275,11 @@ const styles = StyleSheet.create({
     // The pumpkin's body sits below its stem: nudge the label onto the body.
     marginTop: Spacing.two,
     fontSize: 12,
+  },
+  ledButtonPending: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#000000',
   },
   ledButton: {
     alignItems: 'center',

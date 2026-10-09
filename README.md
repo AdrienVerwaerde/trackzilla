@@ -102,6 +102,24 @@ Le ménage se fait au lancement de l'app et après chaque rattrapage, pas à cha
 
 Au retour du réseau, l'app ne redemande que la tranche depuis la mesure la plus récente qu'elle détient (`from` = dernier `ts` connu + 1, la borne du backend étant inclusive). Si le cache est plus vieux que la fenêtre, elle repart du début de la fenêtre : un rattrapage partiel laisserait un trou. Élargir la fenêtre du graphique est le seul cas qui redemande tout, puisque sa moitié ancienne n'a jamais été téléchargée — et le cache répond en premier, de sorte que le graphique s'élargit même hors ligne.
 
+### La file de commandes
+
+Chaque appui sur la LED crée une ligne en base (`id` généré par l'app, device, état voulu, statut, nombre de tentatives, date) : elle survit à la fermeture de l'app. Statuts : `pending` → `sent` → `acked`, ou `failed` après 5 tentatives réseau ou un refus du backend.
+
+L'app **n'attend pas le réseau pour accepter l'ordre**. Le bouton prend tout de suite l'état voulu, en pointillé, marqué « en attente » puis « envoyée » ; il est confirmé à `acked` par le vrai boîtier, et revient en arrière avec un message à `failed`.
+
+**Conflit entre deux ordres contradictoires : seul le dernier par device survit.** Quand une commande est mise en file, les `pending` du même device sont supprimées — elles ne sont jamais parties, donc rien ne s'est passé qu'il faille raconter. Rejouer les deux ferait clignoter la LED pour finir au même endroit, et le backend n'acquitte de toute façon que la dernière commande en attente : les précédentes expireraient en `failed` et afficheraient des erreurs qui n'en sont pas.
+
+Un redémarrage remet en `pending` ce qui était `sent` : l'acquittement a pu être manqué pendant que l'app était morte. Le rejeu est sans risque puisque le backend republie jamais deux fois le même `id` — s'il avait déjà été traité, il répond 200 avec son statut réel.
+
+Un seul vidage à la fois (un verrou) : le socket qui s'ouvre et NetInfo qui annonce le retour du réseau se déclenchent ensemble, et deux passes enverraient le même ordre deux fois. La file se vide dans l'ordre, en une passe, et s'arrête à la première erreur réseau pour reprendre après le délai.
+
+### Backoff et jitter
+
+WebSocket **et** file partagent le même calcul : 1 s, 2 s, 4 s… plafonné à 30 s, ±30 % de hasard, compteur remis à zéro au premier succès. Le plafond évite de réveiller la radio soixante fois par minute dans un tunnel ; le hasard évite que les huit téléphones de la salle ne se reconnectent à la même seconde après un redémarrage du backend.
+
+Quand NetInfo annonce le retour du réseau, le délai en cours est abandonné et la tentative est immédiate, pour le socket comme pour la file. En arrière-plan, rien : ni socket, ni vidage de file.
+
 ### Données datées et distinguées
 
 Hors ligne, la bannière date la dernière mesure (« Hors ligne · dernières données à 14h02 ») et la carte passe de « Mesure à » à « Dernière mesure à ». Le statut du capteur ne s'affiche jamais en vert tant que le socket est fermé : ce qui vient du cache est annoncé comme « Dernier état connu », parce qu'un point vert ressorti de la veille est un mensonge. Les courbes sont atténuées quand elles viennent du cache ; l'atténuation porte sur les graphiques et non sur leurs libellés, le plancher de contraste de 4,5:1 s'appliquant au texte.

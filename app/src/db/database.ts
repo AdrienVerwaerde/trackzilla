@@ -47,7 +47,8 @@ async function open() {
       id         TEXT PRIMARY KEY,
       group_name TEXT    NOT NULL,
       status     TEXT    NOT NULL,
-      last_seen  INTEGER
+      last_seen  INTEGER,
+      led        INTEGER
     );
 
     -- Not read yet: the Réglages screen is what opens these offline.
@@ -71,6 +72,20 @@ async function open() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_events_device_ts ON events (device, ts);
+
+    -- The queue. The id is chosen here and sent to the backend, which refuses
+    -- to publish the same one twice: that is what makes a replay safe.
+    CREATE TABLE IF NOT EXISTS commands (
+      id         TEXT PRIMARY KEY,
+      device     TEXT    NOT NULL,
+      led        INTEGER NOT NULL,
+      status     TEXT    NOT NULL,
+      attempts   INTEGER NOT NULL DEFAULT 0,
+      reason     TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_commands_status ON commands (status, created_at);
   `);
 
   return db;
