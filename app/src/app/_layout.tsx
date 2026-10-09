@@ -9,6 +9,7 @@ import { AppBackground } from '@/components/app-background';
 import AppTabs from '@/components/app-tabs';
 import { NetworkBanner } from '@/components/network-banner';
 import { useAppLifecycle } from '@/hooks/use-app-lifecycle';
+import { useCachedTelemetry } from '@/hooks/use-cached-telemetry';
 import { useNetwork } from '@/hooks/use-network';
 import { useTelemetrySocket } from '@/hooks/use-telemetry-socket';
 
@@ -19,6 +20,8 @@ export default function TabLayout() {
   const [fontsLoaded] = useFonts({ Oi_400Regular });
   useAppLifecycle();
   useNetwork();
+  // Before the socket: the screen is drawn from the cache, then revalidated.
+  useCachedTelemetry();
   useTelemetrySocket();
 
   const theme = useMemo(() => {

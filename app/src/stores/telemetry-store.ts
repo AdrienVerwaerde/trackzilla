@@ -34,7 +34,13 @@ type TelemetryState = {
    * none is pending. The banner counts down to it.
    */
   nextAttemptAt: number | null;
-  /** `unknown` until `GET /devices` or a `device_status` event says otherwise. */
+  /**
+   * False until the local cache has been read. It separates "nothing was ever
+   * stored" from "not read yet", so an empty dashboard can say which it is
+   * instead of showing a blank chart that might still fill in.
+   */
+  hydrated: boolean;
+  /** `unknown` until the cache, `GET /devices` or a `device_status` event says otherwise. */
   deviceStatus: DeviceStatus | 'unknown';
   /** Epoch seconds of the device's last activity. */
   lastSeen: number | null;
@@ -52,6 +58,8 @@ type TelemetryState = {
   setConnection: (connection: BackendConnection) => void;
   /** Announced by the socket hook right after it schedules a retry. */
   setNextAttemptAt: (nextAttemptAt: number | null) => void;
+  /** Called once the cache has been read, whether or not it held anything. */
+  markHydrated: () => void;
   setDevice: (device: Device) => void;
   /** Shrinking trims at once; growing needs a REST reload (the socket hook does it). */
   setWindowSeconds: (windowSeconds: LiveWindow) => void;
@@ -73,6 +81,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   deviceId: DeviceId,
   connection: 'idle',
   nextAttemptAt: null,
+  hydrated: false,
   windowSeconds: LiveWindows[0],
   deviceStatus: 'unknown',
   lastSeen: null,
@@ -91,6 +100,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   },
 
   setNextAttemptAt: (nextAttemptAt) => set({ nextAttemptAt }),
+
+  markHydrated: () => set({ hydrated: true }),
 
   setDevice: (device) => {
     if (device.id !== get().deviceId) return;
