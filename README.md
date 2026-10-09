@@ -84,9 +84,31 @@ Les bornes plausibles (-10 à 50 °C, 0 à 100 % d'humidité) correspondent à u
 
 Un statut online/offline n'est journalisé que s'il change : le broker rejoue le dernier statut à chaque reconnexion, et ce n'est pas un événement.
 
+## Choix côté app
+
+### Ce que le cache garde, et jusqu'où
+
+Le cache local (SQLite, `expo-sqlite`) n'est pas une copie du backend : c'est ce dont l'utilisateur a besoin quand il est coupé. Quatre tables — `measurements`, `devices`, `thresholds`, `events`.
+
+Les mesures sont bornées à **la fenêtre la plus large que le tableau de bord sait afficher (3 h)**, et non à une durée ronde choisie à part. Garder plus serait garder ce qu'aucun écran ne peut dessiner ; garder moins ferait un trou dans la courbe en mode avion. À une mesure toutes les 5 s, cela représente environ 2 160 lignes par device : une courbe qui vaut la peine d'être ouverte en vol, et une table assez petite pour être relue d'un coup au démarrage.
+
+Le ménage se fait au lancement de l'app et après chaque rattrapage, pas à chaque insertion : une mesure arrive toutes les 5 s, et un `DELETE` à cette fréquence coûterait bien plus que les quelques lignes qu'il récupère.
+
+### Afficher d'abord, rafraîchir ensuite
+
+À l'ouverture, l'écran se dessine depuis le cache avant que le réseau ne soit sollicité, puis le socket remplace ce qu'il peut. En mode avion il ne répond jamais, et l'écran est quand même là : c'est tout l'intérêt. Aucun écran blanc n'attend le réseau.
+
+### Ne recharger que ce qui manque
+
+Au retour du réseau, l'app ne redemande que la tranche depuis la mesure la plus récente qu'elle détient (`from` = dernier `ts` connu + 1, la borne du backend étant inclusive). Si le cache est plus vieux que la fenêtre, elle repart du début de la fenêtre : un rattrapage partiel laisserait un trou. Élargir la fenêtre du graphique est le seul cas qui redemande tout, puisque sa moitié ancienne n'a jamais été téléchargée — et le cache répond en premier, de sorte que le graphique s'élargit même hors ligne.
+
+### Données datées et distinguées
+
+Hors ligne, la bannière date la dernière mesure (« Hors ligne · dernières données à 14h02 ») et la carte passe de « Mesure à » à « Dernière mesure à ». Le statut du capteur ne s'affiche jamais en vert tant que le socket est fermé : ce qui vient du cache est annoncé comme « Dernier état connu », parce qu'un point vert ressorti de la veille est un mensonge. Les courbes sont atténuées quand elles viennent du cache ; l'atténuation porte sur les graphiques et non sur leurs libellés, le plancher de contraste de 4,5:1 s'appliquant au texte.
+
 ## Contribution
 
 | Membre | Couche | Branches |
 | --- | --- | --- |
-| Adrien Verwaerde | App (tableau de bord, historique, cycle de vie du WebSocket) | `frontend` |
+| Adrien Verwaerde | App (tableau de bord, historique, cycle de vie du WebSocket, bannière réseau, cache local) | `frontend`, `frontend_graph`, `frontend_local-cache` |
 | Samantha | Backend (MQTT, stockage, historique, seuils, commandes, WebSocket, journal, mode hors ligne) | `backend`, `backend_offline_mode` |

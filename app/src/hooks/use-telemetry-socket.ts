@@ -3,15 +3,32 @@ import { useEffect } from 'react';
 import { getDevices, getMeasurements, nowSeconds } from '@/api/client';
 import { WsUrl } from '@/api/config';
 import type { SocketEvent } from '@/api/types';
+import {
+  pruneMeasurements,
+  readMeasurements,
+  saveDevice,
+  saveDeviceStatus,
+  saveMeasurements,
+} from '@/db/telemetry-cache';
 import { useSensorStore } from '@/stores/sensor-store';
 import { useTelemetryStore } from '@/stores/telemetry-store';
 
 /** Delay before trying the backend again after the socket dropped. */
 const RetryDelayMs = 3000;
 
-/** Fills the sliding window from REST: on open, and after every gap. */
-async function loadRecent() {
-  const { deviceId, windowSeconds, setDevice, mergeMeasurements } = useTelemetryStore.getState();
+/**
+ * Fills the sliding window from REST, and mirrors what comes back into the
+ * cache.
+ *
+ * `backfill` asks for the whole window. That is what a widened chart needs,
+ * since its older half was never fetched. Left false — the reconnection case —
+ * only the stretch since the newest reading already held is asked for, which
+ * is the brief's "ne rechargez que ce qui manque".
+ */
+async function loadRecent({ backfill }: { backfill: boolean }) {
+  const { deviceId, windowSeconds, last, setDevice, mergeMeasurements } =
+    useTelemetryStore.getState();
+  const now = nowSeconds();
 
   try {
     const device = (await getDevices()).find((d) => d.id === deviceId);
@@ -20,10 +37,42 @@ async function loadRecent() {
     if (!device) return;
 
     setDevice(device);
-    mergeMeasurements(await getMeasurements(deviceId, { from: nowSeconds() - windowSeconds }));
+    await saveDevice(device);
+
+    // `+ 1` because the backend's range is inclusive, and the floor because a
+    // cache older than the window leaves a hole a gap-only fetch would keep.
+    const windowStart = now - windowSeconds;
+    const from = backfill ? windowStart : Math.max(windowStart, (last?.ts ?? 0) + 1);
+
+    const measurements = await getMeasurements(deviceId, { from });
+    mergeMeasurements(measurements);
+    await saveMeasurements(deviceId, measurements);
+    await pruneMeasurements(deviceId, now);
   } catch (error) {
     console.warn('[telemetry] REST reload failed', error);
   }
+}
+
+/**
+ * Mirrors into the cache what the store has just taken from the socket, so a
+ * reading is still there after the app is killed.
+ *
+ * Writes are not awaited: the stream must not stall on the disk, and a cache
+ * that misses a row is a shorter curve, not a wrong one.
+ */
+function cacheEvent(event: SocketEvent) {
+  const { deviceId } = useTelemetryStore.getState();
+  if (event.device !== deviceId) return;
+
+  const failed = (error: unknown) => console.warn('[cache] write failed', error);
+
+  if (event.type === 'measurement') {
+    const { ts, t, h } = event;
+    saveMeasurements(deviceId, [{ ts, t, h }]).catch(failed);
+  }
+
+  // A no-op until REST has created the row, which happens on the same open.
+  if (event.type === 'device_status') saveDeviceStatus(deviceId, event.status).catch(failed);
 }
 
 /**
@@ -34,10 +83,27 @@ export function useTelemetrySocket() {
   const appState = useSensorStore((state) => state.appState);
   const windowSeconds = useTelemetryStore((state) => state.windowSeconds);
 
-  // A wider window needs older readings the store never kept. While the socket
-  // is closed there is nothing to do: its `onopen` reloads the whole window.
+  // A wider window needs readings the store trimmed away. The cache usually
+  // still holds them, so it answers first and the chart widens even in
+  // airplane mode; the network then fills whatever the cache lacked.
   useEffect(() => {
-    if (useTelemetryStore.getState().connection === 'open') loadRecent();
+    let cancelled = false;
+
+    async function widen() {
+      const { deviceId, mergeMeasurements, connection } = useTelemetryStore.getState();
+      const cached = await readMeasurements(deviceId, nowSeconds() - windowSeconds);
+
+      if (cancelled) return;
+      mergeMeasurements(cached);
+
+      if (connection === 'open') await loadRecent({ backfill: true });
+    }
+
+    widen();
+
+    return () => {
+      cancelled = true;
+    };
   }, [windowSeconds]);
 
   useEffect(() => {
@@ -65,13 +131,15 @@ export function useTelemetrySocket() {
         // Socket first, REST second: a measurement arriving while the history
         // loads is caught by the socket, and the store drops the duplicate.
         // The other order leaves a hole between the two.
-        loadRecent();
+        loadRecent({ backfill: false });
       };
 
       socket.onmessage = (message) => {
         // A malformed frame must not take the dashboard down.
         try {
-          handleEvent(JSON.parse(String(message.data)) as SocketEvent);
+          const event = JSON.parse(String(message.data)) as SocketEvent;
+          handleEvent(event);
+          cacheEvent(event);
         } catch {
           console.warn('[telemetry] unreadable frame', message.data);
         }

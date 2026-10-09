@@ -7,7 +7,7 @@ import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
 import { nowSeconds, sendCommand } from '@/api/client';
-import type { ThresholdKind } from '@/api/types';
+import type { DeviceStatus, ThresholdKind } from '@/api/types';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { type ActiveAlert, type LiveWindow, LiveWindows, useTelemetryStore } from '@/stores/telemetry-store';
@@ -22,6 +22,12 @@ const AlertColor = '#ff3b30';
 const ClockTickMs = 15_000;
 
 type Indicator = { color: string; label: string };
+
+/** How the box's last known state reads once it is no longer live. */
+const StatusLabels: Record<DeviceStatus, string> = {
+  online: 'en ligne',
+  offline: 'hors ligne',
+};
 
 /** Size of the pumpkin behind each window chip: wide enough to hold "10 min". */
 const PumpkinSize = 64;
@@ -77,13 +83,19 @@ export function LiveCard() {
   // Only the box ↔ broker level: whether the app itself reaches the backend is
   // the banner's job, and saying it twice would read as two different faults.
   // A green dot while the box has been unplugged for an hour would be a lie.
+  //
+  // So is a green dot drawn from the cache. With the socket closed, the status
+  // on screen is the last one we were told, however long ago that was, and it
+  // has to read as such rather than as "en direct".
   let indicator: Indicator;
-  if (deviceStatus === 'offline') {
-    indicator = { color: WarningColor, label: `Capteur hors ligne${sinceLabel(lastSeen, now)}` };
-  } else if (deviceStatus === 'online') {
-    indicator = { color: LiveColor, label: 'En direct' };
-  } else {
+  if (deviceStatus === 'unknown') {
     indicator = { color: WaitingColor, label: 'En attente du capteur…' };
+  } else if (connection !== 'open') {
+    indicator = { color: WaitingColor, label: `Dernier état connu : ${StatusLabels[deviceStatus]}` };
+  } else if (deviceStatus === 'offline') {
+    indicator = { color: WarningColor, label: `Capteur hors ligne${sinceLabel(lastSeen, now)}` };
+  } else {
+    indicator = { color: LiveColor, label: 'En direct' };
   }
 
   const isLive = connection === 'open' && deviceStatus === 'online';
@@ -155,22 +167,28 @@ export function LiveCard() {
         })}
       </View>
 
-      <LiveChart
-        title="Température"
-        unit="°C"
-        points={measurements.map((m) => ({ ts: m.ts, value: m.t }))}
-        from={windowStart}
-        to={windowEnd}
-        windowLabel={`-${WindowLabels[windowSeconds]}`}
-      />
-      <LiveChart
-        title="Humidité"
-        unit="%"
-        points={measurements.map((m) => ({ ts: m.ts, value: m.h }))}
-        from={windowStart}
-        to={windowEnd}
-        windowLabel={`-${WindowLabels[windowSeconds]}`}
-      />
+      {/* Dimmed when the curves come from the cache rather than the socket.
+          The dimming is on the charts, not on their labels: the contrast floor
+          of 4.5:1 applies to text, and the date above already carries the
+          distinction in words for anyone who cannot see the difference. */}
+      <View style={[styles.charts, !isLive && styles.stale]}>
+        <LiveChart
+          title="Température"
+          unit="°C"
+          points={measurements.map((m) => ({ ts: m.ts, value: m.t }))}
+          from={windowStart}
+          to={windowEnd}
+          windowLabel={`-${WindowLabels[windowSeconds]}`}
+        />
+        <LiveChart
+          title="Humidité"
+          unit="%"
+          points={measurements.map((m) => ({ ts: m.ts, value: m.h }))}
+          from={windowStart}
+          to={windowEnd}
+          windowLabel={`-${WindowLabels[windowSeconds]}`}
+        />
+      </View>
 
       {activeAlerts.map(([kind, alert]) => (
         <ThemedText key={kind} type="small" style={styles.alert}>
@@ -222,6 +240,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Spacing.three,
+  },
+  charts: {
+    // The card's own gap stops at its direct children, so the wrapper has to
+    // keep the two charts apart itself.
+    gap: Spacing.two,
   },
   stale: {
     opacity: 0.5,
