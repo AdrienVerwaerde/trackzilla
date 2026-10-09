@@ -7,14 +7,16 @@ import {
   pruneMeasurements,
   readMeasurements,
   saveDevice,
+  saveDeviceLed,
   saveDeviceStatus,
   saveMeasurements,
 } from '@/db/telemetry-cache';
+import { handleCommandEvent } from '@/services/command-queue';
+import { useCommandStore } from '@/stores/command-store';
+import { useNetworkStore } from '@/stores/network-store';
 import { useSensorStore } from '@/stores/sensor-store';
 import { useTelemetryStore } from '@/stores/telemetry-store';
-
-/** Delay before trying the backend again after the socket dropped. */
-const RetryDelayMs = 3000;
+import { backoffDelay } from '@/utils/backoff';
 
 /**
  * Fills the sliding window from REST, and mirrors what comes back into the
@@ -38,6 +40,7 @@ async function loadRecent({ backfill }: { backfill: boolean }) {
 
     setDevice(device);
     await saveDevice(device);
+    if (device.led !== null) useCommandStore.getState().setLed(device.led);
 
     // `+ 1` because the backend's range is inclusive, and the floor because a
     // cache older than the window leaves a hole a gap-only fetch would keep.
@@ -71,8 +74,9 @@ function cacheEvent(event: SocketEvent) {
     saveMeasurements(deviceId, [{ ts, t, h }]).catch(failed);
   }
 
-  // A no-op until REST has created the row, which happens on the same open.
+  // No-ops until REST has created the row, which happens on the same open.
   if (event.type === 'device_status') saveDeviceStatus(deviceId, event.status).catch(failed);
+  if (event.type === 'device_state') saveDeviceLed(deviceId, event.led).catch(failed);
 }
 
 /**
@@ -118,6 +122,7 @@ export function useTelemetrySocket() {
     let socket: WebSocket | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
+    let attempt = 0;
 
     function connect() {
       // While retrying, the screen keeps saying "hors ligne" rather than
@@ -127,6 +132,7 @@ export function useTelemetrySocket() {
       socket = new WebSocket(WsUrl);
 
       socket.onopen = () => {
+        attempt = 0;
         setConnection('open');
         // Socket first, REST second: a measurement arriving while the history
         // loads is caught by the socket, and the store drops the duplicate.
@@ -140,6 +146,7 @@ export function useTelemetrySocket() {
           const event = JSON.parse(String(message.data)) as SocketEvent;
           handleEvent(event);
           cacheEvent(event);
+          handleCommandEvent(event).catch((error) => console.warn('[queue]', error));
         } catch {
           console.warn('[telemetry] unreadable frame', message.data);
         }
@@ -152,17 +159,28 @@ export function useTelemetrySocket() {
         if (cancelled) return;
 
         setConnection('lost');
-        // Announced before the timer starts, so the banner can say when the
-        // next attempt is due instead of only that one is coming.
-        setNextAttemptAt(Date.now() + RetryDelayMs);
-        retry = setTimeout(connect, RetryDelayMs);
+        const delay = backoffDelay(attempt++);
+        // Announced before the timer starts, so the banner can count down to it.
+        setNextAttemptAt(Date.now() + delay);
+        retry = setTimeout(connect, delay);
       };
     }
 
     connect();
 
+    // NetInfo saying the network is back beats waiting out the delay.
+    const unsubscribe = useNetworkStore.subscribe((state, previous) => {
+      if (!state.reachable || previous.reachable || !retry) return;
+
+      clearTimeout(retry);
+      retry = null;
+      attempt = 0;
+      connect();
+    });
+
     return () => {
       cancelled = true;
+      unsubscribe();
       if (retry) clearTimeout(retry);
       socket?.close();
     };

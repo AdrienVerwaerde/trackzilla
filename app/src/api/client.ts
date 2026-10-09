@@ -1,5 +1,5 @@
 import { ApiUrl } from '@/api/config';
-import type { Device, Measurement, Thresholds } from '@/api/types';
+import type { CommandAck, Device, Measurement, Thresholds } from '@/api/types';
 
 export class ApiError extends Error {
   constructor(
@@ -43,8 +43,9 @@ export const putThresholds = (device: string, thresholds: Thresholds) =>
     body: JSON.stringify(thresholds),
   });
 
-export const sendCommand = (device: string, command: { led: boolean }) =>
-  request<{ sent: boolean }>(`/devices/${encodeURIComponent(device)}/commands`, {
+/** The `id` is ours: the backend publishes a given one only once. */
+export const sendCommand = (device: string, command: { id: string; led: boolean }) =>
+  request<CommandAck>(`/devices/${encodeURIComponent(device)}/commands`, {
     method: 'POST',
     body: JSON.stringify(command),
   });

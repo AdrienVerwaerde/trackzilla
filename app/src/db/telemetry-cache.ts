@@ -15,7 +15,13 @@ import { LiveWindows } from '@/stores/telemetry-store';
 export const CacheWindowSeconds = Math.max(...LiveWindows);
 
 type MeasurementRow = { ts: number; t: number | null; h: number | null };
-type DeviceRow = { id: string; group_name: string; status: string; last_seen: number | null };
+type DeviceRow = {
+  id: string;
+  group_name: string;
+  status: string;
+  last_seen: number | null;
+  led: number | null;
+};
 
 /** The cached readings for a device, oldest first, from `since` onwards. */
 export async function readMeasurements(device: string, since: number): Promise<Measurement[]> {
@@ -82,6 +88,7 @@ export async function readDevice(device: string): Promise<Device | null> {
     // Narrowed on the way out: the column is text, the app's type is a union.
     status: row.status === 'online' ? 'online' : 'offline',
     lastSeen: row.last_seen ?? 0,
+    led: row.led === null ? null : row.led === 1,
   };
 }
 
@@ -89,10 +96,22 @@ export async function saveDevice(device: Device) {
   const db = await getDatabase();
 
   await db.runAsync(
-    `INSERT OR REPLACE INTO devices (id, group_name, status, last_seen)
-     VALUES (?, ?, ?, ?)`,
-    [device.id, device.group, device.status, device.lastSeen]
+    `INSERT OR REPLACE INTO devices (id, group_name, status, last_seen, led)
+     VALUES (?, ?, ?, ?, ?)`,
+    [
+      device.id,
+      device.group,
+      device.status,
+      device.lastSeen,
+      device.led === null ? null : Number(device.led),
+    ]
   );
+}
+
+export async function saveDeviceLed(device: string, led: boolean) {
+  const db = await getDatabase();
+
+  await db.runAsync('UPDATE devices SET led = ? WHERE id = ?', [Number(led), device]);
 }
 
 /**
