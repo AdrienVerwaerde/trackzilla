@@ -15,6 +15,11 @@ export function formatClock(at: number) {
   return `${pad(date.getHours())}h${pad(date.getMinutes())}`;
 }
 
+/** Comma as the decimal separator, one decimal: "22,4". */
+export function formatValue(value: number | null | undefined) {
+  return value === null || value === undefined ? '–' : value.toFixed(1).replace('.', ',');
+}
+
 /** Display names of the threshold kinds, shared by the dashboard and the journal. */
 export const ThresholdLabels: Record<ThresholdKind, string> = {
   tMin: 'Min-Temp',

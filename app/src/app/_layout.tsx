@@ -11,6 +11,7 @@ import { NetworkBanner } from '@/components/network-banner';
 import { useAppLifecycle } from '@/hooks/use-app-lifecycle';
 import { useCachedTelemetry } from '@/hooks/use-cached-telemetry';
 import { useCommandQueue } from '@/hooks/use-command-queue';
+import { useJournal } from '@/hooks/use-journal';
 import { useNetwork } from '@/hooks/use-network';
 import { useTelemetrySocket } from '@/hooks/use-telemetry-socket';
 
@@ -24,6 +25,7 @@ export default function TabLayout() {
   // Before the socket: the screen is drawn from the cache, then revalidated.
   useCachedTelemetry();
   useCommandQueue();
+  useJournal();
   useTelemetrySocket();
 
   const theme = useMemo(() => {

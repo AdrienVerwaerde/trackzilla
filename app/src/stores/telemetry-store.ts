@@ -3,8 +3,6 @@ import { create } from 'zustand';
 import { nowSeconds } from '@/api/client';
 import { DeviceId } from '@/api/config';
 import type { Device, DeviceStatus, Measurement, SocketEvent, ThresholdKind } from '@/api/types';
-import { useSensorStore } from '@/stores/sensor-store';
-import { ThresholdLabels } from '@/utils/format';
 
 /** Lengths of the dashboard's sliding window the user can pick, in seconds. */
 export const LiveWindows = [10 * 60, 60 * 60, 3 * 60 * 60] as const;
@@ -68,15 +66,6 @@ type TelemetryState = {
   handleEvent: (event: SocketEvent) => void;
 };
 
-const ConnectionMessages: Partial<Record<BackendConnection, string>> = {
-  open: 'Backend : connecté',
-  lost: 'Backend : connexion perdue',
-};
-
-function log(message: string) {
-  useSensorStore.getState().pushLog('telemetry', message);
-}
-
 export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   deviceId: DeviceId,
   connection: 'idle',
@@ -95,8 +84,6 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
     // Entering a new state voids the attempt the previous one had scheduled;
     // the hook announces a fresh one when it schedules the next retry.
     set({ connection, nextAttemptAt: null });
-    const message = ConnectionMessages[connection];
-    if (message) log(message);
   },
 
   setNextAttemptAt: (nextAttemptAt) => set({ nextAttemptAt }),
@@ -148,13 +135,11 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       case 'device_status':
         if (event.status === get().deviceStatus) return;
         set({ deviceStatus: event.status });
-        log(`Capteur : ${event.status === 'online' ? 'en ligne' : 'hors ligne'}`);
         break;
 
       case 'alert': {
         const { kind, ts, value, threshold } = event;
         set((state) => ({ alerts: { ...state.alerts, [kind]: { ts, value, threshold } } }));
-        log(`Alerte ${ThresholdLabels[kind]} : ${value} (seuil ${threshold})`);
         break;
       }
 
@@ -163,7 +148,6 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
           const { [event.kind]: _cleared, ...alerts } = state.alerts;
           return { alerts };
         });
-        log(`Retour à la normale : ${ThresholdLabels[event.kind]}`);
         break;
     }
   },

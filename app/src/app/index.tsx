@@ -1,20 +1,26 @@
-import { LogRow } from '@/components/log-row';
+import { JournalRow } from '@/components/journal-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing, TopInset } from '@/constants/theme';
-import { useSensorStore } from '@/stores/sensor-store';
+import { useCommandStore } from '@/stores/command-store';
+import { useJournalStore } from '@/stores/journal-store';
+import { toJournalEntries } from '@/utils/journal';
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const LastEventsCount = 5;
 
 export default function HomeScreen() {
-  const log = useSensorStore((state) => state.log);
-  // Sliced outside the selector: a selector returning a new array on every call
-  // would re-render on every store notification.
-  const lastEvents = log.slice(0, LastEventsCount);
+  const events = useJournalStore((state) => state.events);
+  const commands = useCommandStore((state) => state.commands);
+
+  const lastEvents = useMemo(
+    () => toJournalEntries(events, commands).slice(0, LastEventsCount),
+    [events, commands]
+  );
 
   return (
     // Transparent: the app background photo shows through from the root layout.
@@ -36,10 +42,12 @@ export default function HomeScreen() {
           </ThemedText>
           {lastEvents.length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary">
-              Pas d'informations pour l'instant.
+              Pas d’informations pour l’instant.
             </ThemedText>
           ) : (
-            lastEvents.map((event) => <LogRow key={event.id} event={event} />)
+            lastEvents.map((entry, index) => (
+              <JournalRow key={entry.key} entry={entry} striped={index % 2 === 0} />
+            ))
           )}
 
           <Link href="/dashboard" asChild>
