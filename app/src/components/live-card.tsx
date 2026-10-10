@@ -129,7 +129,6 @@ export function LiveCard() {
 
       {last && (
         <ThemedText type="small" themeColor="textSecondary">
-          {/* ts is in seconds, formatTime expects milliseconds. */}
           {isLive ? 'Mesure' : 'Dernière mesure'} à {formatTime(last.ts * 1000)}
         </ThemedText>
       )}
@@ -141,9 +140,7 @@ export function LiveCard() {
             <Pressable
               key={window}
               onPress={() => setWindowSeconds(window)}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}>
-              {/* The pumpkin is the chip's shape: the label sits centered on top of it. */}
+              accessibilityRole="button">
               <View style={styles.chip}>
                 <MaterialCommunityIcons
                   name="pumpkin"
@@ -160,10 +157,6 @@ export function LiveCard() {
         })}
       </View>
 
-      {/* Dimmed when the curves come from the cache rather than the socket.
-          The dimming is on the charts, not on their labels: the contrast floor
-          of 4.5:1 applies to text, and the date above already carries the
-          distinction in words for anyone who cannot see the difference. */}
       <View style={[styles.charts, !isLive && styles.stale]}>
         <LiveChart
           title="Température"
@@ -243,14 +236,13 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   charts: {
-    // The card's own gap stops at its direct children, so the wrapper has to
-    // keep the two charts apart itself.
     gap: Spacing.two,
   },
   stale: {
     opacity: 0.5,
   },
   alert: {
+    textAlign: 'center',
     color: AlertColor,
     fontWeight: 'bold',
     backgroundColor: '#eaeaea',
@@ -272,7 +264,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   chipLabel: {
-    // The pumpkin's body sits below its stem: nudge the label onto the body.
     marginTop: Spacing.two,
     fontSize: 12,
   },

@@ -7,10 +7,8 @@ import { BottomTabInset, MaxContentWidth, Spacing, TopInset } from '@/constants/
 
 export default function DashboardScreen() {
   return (
-    // Transparent: the app background photo shows through from the root layout.
     <View style={styles.container}>
       <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-        {/* Scrolls on small screens: the card with its two charts is tall. */}
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.header}>
             <ThemedText type="subtitle">Dashboard</ThemedText>
@@ -32,7 +30,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     width: '100%',
-    // Margin, not padding: SafeAreaView owns its padding for the status bar.
     marginTop: TopInset,
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,

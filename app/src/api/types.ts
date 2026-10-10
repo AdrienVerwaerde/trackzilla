@@ -31,6 +31,23 @@ export type ThresholdKind = 'tMin' | 'tMax' | 'hMin' | 'hMax';
 /** 202 the first time, 200 when the id was already seen. */
 export type CommandAck = { id: string; status: 'sent' | 'acked' | 'failed' };
 
+export type JournalEventType = 'alert' | 'alert_cleared' | 'status' | 'command' | 'command_status';
+
+/** A row of the backend journal: the payload arrives flattened beside the row. */
+export type JournalEvent = {
+  eventId: number;
+  device: string;
+  ts: number;
+  type: JournalEventType;
+  kind?: ThresholdKind;
+  value?: number;
+  threshold?: number;
+  status?: DeviceStatus;
+  id?: string;
+  led?: boolean;
+  reason?: string;
+};
+
 /** Events pushed by the backend over the WebSocket. */
 export type SocketEvent =
   | ({ type: 'measurement'; device: string } & Measurement)

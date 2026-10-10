@@ -1,5 +1,5 @@
 import { ApiUrl } from '@/api/config';
-import type { CommandAck, Device, Measurement, Thresholds } from '@/api/types';
+import type { CommandAck, Device, JournalEvent, Measurement, Thresholds } from '@/api/types';
 
 export class ApiError extends Error {
   constructor(
@@ -24,14 +24,24 @@ export const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 export const getDevices = () => request<Device[]>('/devices');
 
-/** `step` absent: raw measurements. `step` in seconds: one average per slice. */
-export function getMeasurements(device: string, range: { from?: number; to?: number; step?: number } = {}) {
+function queryString(params: Record<string, number | undefined>) {
   const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(range)) {
+  for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) query.set(key, String(value));
   }
-  const suffix = query.size ? `?${query}` : '';
-  return request<Measurement[]>(`/devices/${encodeURIComponent(device)}/measurements${suffix}`);
+  return query.size ? `?${query}` : '';
+}
+
+/** `step` absent: raw measurements. `step` in seconds: one average per slice. */
+export function getMeasurements(device: string, range: { from?: number; to?: number; step?: number } = {}) {
+  const path = `/devices/${encodeURIComponent(device)}/measurements${queryString(range)}`;
+  return request<Measurement[]>(path);
+}
+
+/** Oldest first. `from` is inclusive: dedupe on `eventId`. */
+export function getEvents(device: string, range: { from?: number; to?: number; limit?: number } = {}) {
+  const path = `/devices/${encodeURIComponent(device)}/events${queryString(range)}`;
+  return request<JournalEvent[]>(path);
 }
 
 export const getThresholds = (device: string) =>

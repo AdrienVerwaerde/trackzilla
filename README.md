@@ -120,6 +120,14 @@ WebSocket **et** file partagent le même calcul : 1 s, 2 s, 4 s… plafonné à 
 
 Quand NetInfo annonce le retour du réseau, le délai en cours est abandonné et la tentative est immédiate, pour le socket comme pour la file. En arrière-plan, rien : ni socket, ni vidage de file.
 
+### Le Journal
+
+Il mélange deux sources : les événements du backend (`GET /devices/:id/events`, mis en cache et dédoublonnés sur `eventId`) et la file de commandes locale.
+
+Les types `command` et `command_status` du backend ne sont **pas** affichés : la file locale raconte la même commande en mieux — elle connaît le nombre de tentatives, et elle existe hors ligne, quand le backend n'a encore rien vu. Les afficher tous les deux listerait chaque commande en double. Une commande partie en plusieurs fois est marquée « rejouée ».
+
+Les événements n'arrivent jamais par le socket directement : une trame `alert`, `alert_cleared` ou `device_status` signale seulement qu'il s'est passé quelque chose, et déclenche un rattrapage REST depuis le dernier `ts` connu. Le backend reste ainsi la seule source des événements, avec son `eventId` comme clé — les trames du socket n'en ont pas, et il faudrait les dédoublonner à la main.
+
 ### Données datées et distinguées
 
 Hors ligne, la bannière date la dernière mesure (« Hors ligne · dernières données à 14h02 ») et la carte passe de « Mesure à » à « Dernière mesure à ». Le statut du capteur ne s'affiche jamais en vert tant que le socket est fermé : ce qui vient du cache est annoncé comme « Dernier état connu », parce qu'un point vert ressorti de la veille est un mensonge. Les courbes sont atténuées quand elles viennent du cache ; l'atténuation porte sur les graphiques et non sur leurs libellés, le plancher de contraste de 4,5:1 s'appliquant au texte.
