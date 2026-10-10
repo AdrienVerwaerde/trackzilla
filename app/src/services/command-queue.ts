@@ -1,5 +1,5 @@
-import { ApiError, sendCommand } from '@/api/client';
-import type { SocketEvent } from '@/api/types';
+import { ApiError, putThresholds, sendCommand } from '@/api/client';
+import type { SocketEvent, Thresholds } from '@/api/types';
 import {
   dropPending,
   insertCommand,
@@ -8,6 +8,7 @@ import {
   readUnsent,
   resetInFlight,
   updateCommand,
+  type CommandStatus,
   type QueuedCommand,
 } from '@/db/command-cache';
 import { useCommandStore } from '@/stores/command-store';
@@ -38,20 +39,29 @@ export async function restoreQueue(device: string, led: boolean | null) {
   useCommandStore.getState().hydrate(await readRecent(device), led);
 }
 
-export async function enqueueCommand(device: string, led: boolean) {
-  const command: QueuedCommand = {
+export const enqueueLed = (device: string, led: boolean) =>
+  enqueue({ device, kind: 'led', payload: { led } });
+
+export const enqueueThresholds = (device: string, thresholds: Thresholds) =>
+  enqueue({ device, kind: 'thresholds', payload: thresholds });
+
+type NewCommand = Pick<QueuedCommand, 'device' | 'kind' | 'payload'>;
+
+async function enqueue({ device, kind, payload }: NewCommand) {
+  const command = {
     id: newId(),
     device,
-    led,
+    kind,
+    payload,
     status: 'pending',
     attempts: 0,
     reason: null,
     createdAt: Math.floor(Date.now() / 1000),
-  };
+  } as QueuedCommand;
 
-  // Only the latest order per device survives — see the README on conflicts.
-  await dropPending(device);
-  useCommandStore.getState().dropPending(device);
+  // Only the latest order of a kind survives — see the README on conflicts.
+  await dropPending(device, kind);
+  useCommandStore.getState().dropPending(device, kind);
 
   await insertCommand(command);
   const store = useCommandStore.getState();
@@ -84,13 +94,26 @@ export function drainNow(device: string) {
   drainQueue(device);
 }
 
+/**
+ * A LED order is only `sent` until the box reports back. A threshold PUT has
+ * nothing to confirm it: the 200 is the confirmation.
+ */
+async function send(command: QueuedCommand): Promise<CommandStatus> {
+  if (command.kind === 'thresholds') {
+    await putThresholds(command.device, command.payload);
+    return 'acked';
+  }
+
+  const ack = await sendCommand(command.device, { id: command.id, led: command.payload.led });
+  return ack.status;
+}
+
 /** False when the network is gone and the rest of the pass should wait. */
 async function attempt(command: QueuedCommand): Promise<boolean> {
   const attempts = command.attempts + 1;
 
   try {
-    const ack = await sendCommand(command.device, { id: command.id, led: command.led });
-    await settle(command.id, ack.status, attempts, null);
+    await settle(command.id, await send(command), attempts, null);
     return true;
   } catch (error) {
     // A 4xx is a refusal: the same request will be refused again. A 5xx is the

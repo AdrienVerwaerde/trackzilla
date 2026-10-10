@@ -1,19 +1,22 @@
 import { create } from 'zustand';
 
-import type { QueuedCommand } from '@/db/command-cache';
+import type { CommandKind, QueuedCommand } from '@/db/command-cache';
+
+/** Only the fields the queue ever revises; the kind and payload are fixed. */
+type CommandPatch = Partial<Pick<QueuedCommand, 'status' | 'attempts' | 'reason'>>;
 
 type CommandState = {
   /** Newest first. */
   commands: QueuedCommand[];
   /** The LED state the box itself reported, null until it has. */
   led: boolean | null;
-  /** Shown once when a command is given up on. */
+  /** Shown once when an entry is given up on. */
   error: string | null;
 
   hydrate: (commands: QueuedCommand[], led: boolean | null) => void;
   upsert: (command: QueuedCommand) => void;
-  patch: (id: string, fields: Partial<QueuedCommand>) => void;
-  dropPending: (device: string) => void;
+  patch: (id: string, fields: CommandPatch) => void;
+  dropPending: (device: string, kind: CommandKind) => void;
   setLed: (led: boolean) => void;
   setError: (error: string | null) => void;
 };
@@ -32,12 +35,14 @@ export const useCommandStore = create<CommandState>((set) => ({
 
   patch: (id, fields) =>
     set((state) => ({
-      commands: state.commands.map((c) => (c.id === id ? { ...c, ...fields } : c)),
+      commands: state.commands.map((c) => (c.id === id ? ({ ...c, ...fields } as QueuedCommand) : c)),
     })),
 
-  dropPending: (device) =>
+  dropPending: (device, kind) =>
     set((state) => ({
-      commands: state.commands.filter((c) => !(c.device === device && c.status === 'pending')),
+      commands: state.commands.filter(
+        (c) => !(c.device === device && c.kind === kind && c.status === 'pending')
+      ),
     })),
 
   setLed: (led) => set({ led }),
@@ -45,6 +50,6 @@ export const useCommandStore = create<CommandState>((set) => ({
   setError: (error) => set({ error }),
 }));
 
-/** The order still owed to the backend, if any: what the button shows. */
-export const inFlightCommand = (commands: QueuedCommand[]) =>
-  commands.find((c) => c.status === 'pending' || c.status === 'sent') ?? null;
+/** The order of a kind still owed to the backend, if any. */
+export const inFlightCommand = (commands: QueuedCommand[], kind: CommandKind) =>
+  commands.find((c) => c.kind === kind && (c.status === 'pending' || c.status === 'sent')) ?? null;
