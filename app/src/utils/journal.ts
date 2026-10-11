@@ -1,5 +1,6 @@
 import type { JournalEvent } from '@/api/types';
 import type { QueuedCommand } from '@/db/command-cache';
+import type { ConnectionEntry } from '@/db/connection-log';
 import { formatValue, ThresholdLabels } from '@/utils/format';
 
 export type JournalTone = 'alert' | 'ok' | 'pending' | 'neutral';
@@ -79,10 +80,24 @@ function fromCommand(command: QueuedCommand): JournalEntry {
 }
 
 /** The backend's journal and the local queue, newest first. */
-export function toJournalEntries(events: JournalEvent[], commands: QueuedCommand[]): JournalEntry[] {
+/** The phone's side: the sensor's own transitions come from backend events. */
+const fromConnection = (entry: ConnectionEntry): JournalEntry => ({
+  key: `n-${entry.id}`,
+  at: entry.ts,
+  tag: 'réseau',
+  tone: entry.state === 'online' ? 'ok' : 'neutral',
+  label: entry.state === 'online' ? 'En ligne' : 'Hors ligne',
+});
+
+export function toJournalEntries(
+  events: JournalEvent[],
+  commands: QueuedCommand[],
+  connections: ConnectionEntry[]
+): JournalEntry[] {
   const entries = [
     ...events.map(fromEvent).filter((entry): entry is JournalEntry => entry !== null),
     ...commands.map(fromCommand),
+    ...connections.map(fromConnection),
   ];
 
   return entries.sort((a, b) => b.at - a.at || b.key.localeCompare(a.key));

@@ -13,7 +13,12 @@ export default function JournalScreen() {
   const events = useJournalStore((state) => state.events);
   const commands = useCommandStore((state) => state.commands);
 
-  const entries = useMemo(() => toJournalEntries(events, commands), [events, commands]);
+  const connections = useJournalStore((state) => state.connections);
+
+  const entries = useMemo(
+    () => toJournalEntries(events, commands, connections),
+    [events, commands, connections]
+  );
 
   return (
     <View style={styles.container}>

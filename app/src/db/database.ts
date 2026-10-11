@@ -108,6 +108,14 @@ async function createTables(db: SQLiteDatabase) {
 
     CREATE INDEX IF NOT EXISTS idx_commands_status ON commands (status, created_at);
 
+    -- The app's own connection to the backend going up and down. Not a backend
+    -- event: the backend cannot see the phone go offline.
+    CREATE TABLE IF NOT EXISTS connection_log (
+      id    INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts    INTEGER NOT NULL,
+      state TEXT    NOT NULL
+    );
+
     -- User choices that must outlive a restart, such as the alerts toggle.
     CREATE TABLE IF NOT EXISTS preferences (
       key   TEXT PRIMARY KEY,

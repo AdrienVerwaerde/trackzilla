@@ -144,7 +144,9 @@ Quand NetInfo annonce le retour du réseau, le délai en cours est abandonné et
 
 ### Le Journal
 
-Il mélange deux sources : les événements du backend (`GET /devices/:id/events`, mis en cache et dédoublonnés sur `eventId`) et la file de commandes locale.
+Il mélange trois sources : les événements du backend (`GET /devices/:id/events`, mis en cache et dédoublonnés sur `eventId`), la file de commandes locale, et les passages en ligne / hors ligne de l'app elle-même.
+
+Ces derniers sont enregistrés localement (table `connection_log`, 50 lignes) parce que le backend ne peut pas voir le téléphone se couper : seul le capteur a ses propres événements `status`. Seul un changement d'état est noté — une connexion qui hésite donne une ligne « Hors ligne », pas une par tentative — et la mise en arrière-plan n'en est pas un, puisque le socket y est fermé volontairement.
 
 Les types `command` et `command_status` du backend ne sont **pas** affichés : la file locale raconte la même commande en mieux — elle connaît le nombre de tentatives, et elle existe hors ligne, quand le backend n'a encore rien vu. Les afficher tous les deux listerait chaque commande en double. Une commande partie en plusieurs fois est marquée « rejouée ».
 

@@ -16,10 +16,11 @@ const LastEventsCount = 5;
 export default function HomeScreen() {
   const events = useJournalStore((state) => state.events);
   const commands = useCommandStore((state) => state.commands);
+  const connections = useJournalStore((state) => state.connections);
 
   const lastEvents = useMemo(
-    () => toJournalEntries(events, commands).slice(0, LastEventsCount),
-    [events, commands]
+    () => toJournalEntries(events, commands, connections).slice(0, LastEventsCount),
+    [events, commands, connections]
   );
 
   return (
