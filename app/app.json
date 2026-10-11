@@ -2,6 +2,7 @@
   "expo": {
     "name": "Potageek",
     "slug": "potageek",
+    "owner": "adrienverwaerde",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.jpg",
@@ -11,6 +12,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.potageek.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -38,6 +40,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5e1ea0cc-c6c3-4910-b36f-385ee6efdf7c"
+      }
     }
   }
 }

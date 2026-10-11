@@ -32,11 +32,17 @@ async function open() {
  */
 async function migrate(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-  if ((row?.user_version ?? 0) >= SchemaVersion) return;
+  const version = row?.user_version ?? 0;
+  if (version >= SchemaVersion) return;
 
-  // v2 generalised the queue. Old rows have a `led` column and no kind, so
-  // anything still waiting is lost on upgrade — one button press.
-  await db.execAsync('DROP TABLE IF EXISTS commands');
+  // Step-gated: a later version must not re-run an earlier drop. Tables that
+  // are merely new need nothing here, CREATE IF NOT EXISTS covers them.
+  if (version < 2) {
+    // v2 generalised the queue. Old rows have a `led` column and no kind, so
+    // anything still waiting is lost on upgrade — one button press.
+    await db.execAsync('DROP TABLE IF EXISTS commands');
+  }
+
   await db.execAsync(`PRAGMA user_version = ${SchemaVersion}`);
 }
 
@@ -101,5 +107,11 @@ async function createTables(db: SQLiteDatabase) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_commands_status ON commands (status, created_at);
+
+    -- User choices that must outlive a restart, such as the alerts toggle.
+    CREATE TABLE IF NOT EXISTS preferences (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
 }

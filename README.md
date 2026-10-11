@@ -124,6 +124,18 @@ Les seuils modifiés passent par **la même file que les commandes LED**, avec l
 
 La migration vers cette file généralisée est gardée par `PRAGMA user_version` : sans cela, le `DROP` tournerait à chaque démarrage. Une commande encore en attente est perdue à la mise à jour, ce qui coûte un appui sur un bouton.
 
+### Notifications
+
+Deux déclencheurs, en notifications locales (`expo-notifications`) : un événement `alert` reçu du backend, et un boîtier `offline` depuis plus de 3 minutes.
+
+**Une notification par événement, jamais par mesure.** L'app notifie sur la trame `alert`, que le backend n'envoie qu'une fois par dépassement, après `holdMinutes`. Le boîtier silencieux n'est signalé qu'une fois par période de silence (repérée par son `lastSeen`), et seulement quand le socket est ouvert : socket fermé, le statut affiché vient du cache, et le silence peut être le nôtre plutôt que celui du boîtier. Le retour à la normale n'est pas notifié ; il apparaît dans l'app et dans le Journal.
+
+**La permission au bon moment.** Elle n'est jamais demandée au lancement, seulement quand l'utilisateur active les alertes dans Réglages, sous une phrase qui dit pourquoi. Un refus ne casse rien : l'interrupteur reste éteint et les alertes restent visibles dans l'app et dans le Journal.
+
+**Limite assumée : pas d'alerte app fermée.** Le socket est fermé en arrière-plan, donc l'app n'apprend rien tant qu'elle n'est pas au premier plan. C'est le push distant du jour 6, envoyé par le backend, qui lèvera cette limite.
+
+**Expo Go sur Android.** Depuis le SDK 53, le simple import d'`expo-notifications` y lève une erreur : un fichier à effet de bord enregistre un écouteur de jeton push au chargement. Le module est donc chargé à la demande, et l'interrupteur est désactivé dans Expo Go sur Android ; les notifications se testent avec le build de développement (`eas build --profile development`).
+
 ### Backoff et jitter
 
 WebSocket **et** file partagent le même calcul : 1 s, 2 s, 4 s… plafonné à 30 s, ±30 % de hasard, compteur remis à zéro au premier succès. Le plafond évite de réveiller la radio soixante fois par minute dans un tunnel ; le hasard évite que les huit téléphones de la salle ne se reconnectent à la même seconde après un redémarrage du backend.
