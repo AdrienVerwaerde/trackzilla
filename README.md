@@ -114,6 +114,16 @@ Un redémarrage remet en `pending` ce qui était `sent` : l'acquittement a pu ê
 
 Un seul vidage à la fois (un verrou) : le socket qui s'ouvre et NetInfo qui annonce le retour du réseau se déclenchent ensemble, et deux passes enverraient le même ordre deux fois. La file se vide dans l'ordre, en une passe, et s'arrête à la première erreur réseau pour reprendre après le délai.
 
+### Réglages
+
+L'écran s'ouvre depuis le cache (table `thresholds`), puis se met à jour quand le backend répond : il est donc consultable et modifiable hors ligne.
+
+La validation reprend les règles du backend côté app — bornes plausibles, `tMin < tMax`, `hMin < hMax`, `holdMinutes` entre 0 et 1440 — pour que la faute de frappe soit refusée avant d'entrer en file, pas trois heures plus tard au retour du réseau. Un champ vide vaut `null` : la borne n'est pas surveillée.
+
+Les seuils modifiés passent par **la même file que les commandes LED**, avec le même verrou, le même backoff et le même rejeu. La file porte donc un `kind` (`led` ou `thresholds`) et une charge utile JSON plutôt qu'une colonne `led`. Un `PUT` est sa propre confirmation : il passe directement à `acked` sur un 200, là où une commande LED reste `sent` jusqu'à ce que le boîtier réponde. Le conflit se règle par `kind` : enregistrer de nouveaux seuils annule les seuils en attente, sans toucher à une commande LED qui attend elle aussi.
+
+La migration vers cette file généralisée est gardée par `PRAGMA user_version` : sans cela, le `DROP` tournerait à chaque démarrage. Une commande encore en attente est perdue à la mise à jour, ce qui coûte un appui sur un bouton.
+
 ### Backoff et jitter
 
 WebSocket **et** file partagent le même calcul : 1 s, 2 s, 4 s… plafonné à 30 s, ±30 % de hasard, compteur remis à zéro au premier succès. Le plafond évite de réveiller la radio soixante fois par minute dans un tunnel ; le hasard évite que les huit téléphones de la salle ne se reconnectent à la même seconde après un redémarrage du backend.

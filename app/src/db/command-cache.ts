@@ -1,21 +1,27 @@
+import type { Thresholds } from '@/api/types';
 import { getDatabase } from '@/db/database';
 
 export type CommandStatus = 'pending' | 'sent' | 'acked' | 'failed';
+export type CommandKind = 'led' | 'thresholds';
 
-export type QueuedCommand = {
+type Base = {
   id: string;
   device: string;
-  led: boolean;
   status: CommandStatus;
   attempts: number;
   reason: string | null;
   createdAt: number;
 };
 
+export type QueuedCommand =
+  | (Base & { kind: 'led'; payload: { led: boolean } })
+  | (Base & { kind: 'thresholds'; payload: Thresholds });
+
 type CommandRow = {
   id: string;
   device: string;
-  led: number;
+  kind: CommandKind;
+  payload: string;
   status: CommandStatus;
   attempts: number;
   reason: string | null;
@@ -25,26 +31,29 @@ type CommandRow = {
 /** How many entries the Journal keeps per device. */
 const HistoryLimit = 50;
 
-const toCommand = (row: CommandRow): QueuedCommand => ({
-  id: row.id,
-  device: row.device,
-  led: row.led === 1,
-  status: row.status,
-  attempts: row.attempts,
-  reason: row.reason,
-  createdAt: row.created_at,
-});
+const toCommand = (row: CommandRow) =>
+  ({
+    id: row.id,
+    device: row.device,
+    kind: row.kind,
+    payload: JSON.parse(row.payload),
+    status: row.status,
+    attempts: row.attempts,
+    reason: row.reason,
+    createdAt: row.created_at,
+  }) as QueuedCommand;
 
 export async function insertCommand(command: QueuedCommand) {
   const db = await getDatabase();
 
   await db.runAsync(
-    `INSERT INTO commands (id, device, led, status, attempts, reason, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO commands (id, device, kind, payload, status, attempts, reason, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       command.id,
       command.device,
-      command.led ? 1 : 0,
+      command.kind,
+      JSON.stringify(command.payload),
       command.status,
       command.attempts,
       command.reason,
@@ -54,13 +63,17 @@ export async function insertCommand(command: QueuedCommand) {
 }
 
 /**
- * Drops still-pending commands for a device. They never reached the network,
- * so the newer order simply replaces them — see the README on conflicts.
+ * Drops still-pending entries of one kind. They never reached the network, so
+ * the newer order simply replaces them — see the README on conflicts. Scoped
+ * by kind so a threshold edit does not cancel a waiting LED order.
  */
-export async function dropPending(device: string) {
+export async function dropPending(device: string, kind: CommandKind) {
   const db = await getDatabase();
 
-  await db.runAsync(`DELETE FROM commands WHERE device = ? AND status = 'pending'`, [device]);
+  await db.runAsync(`DELETE FROM commands WHERE device = ? AND kind = ? AND status = 'pending'`, [
+    device,
+    kind,
+  ]);
 }
 
 export async function updateCommand(
@@ -98,7 +111,7 @@ export async function readUnsent(device: string): Promise<QueuedCommand[]> {
   return rows.map(toCommand);
 }
 
-/** Recent commands, newest first, for the dashboard and the Journal. */
+/** Recent entries, newest first, for the dashboard and the Journal. */
 export async function readRecent(device: string): Promise<QueuedCommand[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<CommandRow>(
@@ -109,7 +122,7 @@ export async function readRecent(device: string): Promise<QueuedCommand[]> {
   return rows.map(toCommand);
 }
 
-/** A kill mid-flight leaves commands claiming to be sent; they must be retried. */
+/** A kill mid-flight leaves entries claiming to be sent; they must be retried. */
 export async function resetInFlight(device: string) {
   const db = await getDatabase();
 

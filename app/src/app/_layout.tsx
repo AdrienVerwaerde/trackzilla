@@ -12,6 +12,7 @@ import { useAppLifecycle } from '@/hooks/use-app-lifecycle';
 import { useCachedTelemetry } from '@/hooks/use-cached-telemetry';
 import { useCommandQueue } from '@/hooks/use-command-queue';
 import { useJournal } from '@/hooks/use-journal';
+import { useThresholds } from '@/hooks/use-thresholds';
 import { useNetwork } from '@/hooks/use-network';
 import { useTelemetrySocket } from '@/hooks/use-telemetry-socket';
 
@@ -26,6 +27,7 @@ export default function TabLayout() {
   useCachedTelemetry();
   useCommandQueue();
   useJournal();
+  useThresholds();
   useTelemetrySocket();
 
   const theme = useMemo(() => {

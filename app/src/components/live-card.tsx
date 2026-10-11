@@ -10,7 +10,7 @@ import { nowSeconds } from '@/api/client';
 import type { DeviceStatus, ThresholdKind } from '@/api/types';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { enqueueCommand } from '@/services/command-queue';
+import { enqueueLed } from '@/services/command-queue';
 import { inFlightCommand, useCommandStore } from '@/stores/command-store';
 import { type ActiveAlert, type LiveWindow, LiveWindows, useTelemetryStore } from '@/stores/telemetry-store';
 import { formatTime, ThresholdLabels } from '@/utils/format';
@@ -82,8 +82,8 @@ export function LiveCard() {
   const commandError = useCommandStore((state) => state.error);
 
   // Optimistic: the queue's unfinished order wins over the box's last word.
-  const inFlight = inFlightCommand(commands);
-  const led = inFlight ? inFlight.led : (confirmedLed ?? false);
+  const inFlight = inFlightCommand(commands, 'led');
+  const led = inFlight?.kind === 'led' ? inFlight.payload.led : (confirmedLed ?? false);
 
   // Only the box ↔ broker level: whether the app itself reaches the backend is
   // the banner's job, and saying it twice would read as two different faults.
@@ -113,7 +113,7 @@ export function LiveCard() {
   const activeAlerts = Object.entries(alerts) as [ThresholdKind, ActiveAlert][];
 
   // No network check: queuing offline is the point.
-  const toggleLed = () => enqueueCommand(deviceId, !led);
+  const toggleLed = () => enqueueLed(deviceId, !led);
 
   return (
     <ThemedView type="backgroundElement" style={styles.card}>

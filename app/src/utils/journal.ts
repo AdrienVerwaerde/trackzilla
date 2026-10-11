@@ -62,6 +62,9 @@ function fromEvent(event: JournalEvent): JournalEntry | null {
   }
 }
 
+const subject = (command: QueuedCommand) =>
+  command.kind === 'led' ? `LED ${command.payload.led ? 'allumée' : 'éteinte'}` : 'Seuils modifiés';
+
 function fromCommand(command: QueuedCommand): JournalEntry {
   const replayed = command.attempts > 1 ? ' · rejouée' : '';
   const reason = command.status === 'failed' && command.reason ? ` (${command.reason})` : '';
@@ -69,9 +72,9 @@ function fromCommand(command: QueuedCommand): JournalEntry {
   return {
     key: `c-${command.id}`,
     at: command.createdAt,
-    tag: 'commande',
+    tag: command.kind === 'led' ? 'commande' : 'réglages',
     tone: CommandTones[command.status],
-    label: `LED ${command.led ? 'allumée' : 'éteinte'} · ${CommandLabels[command.status]}${reason}${replayed}`,
+    label: `${subject(command)} · ${CommandLabels[command.status]}${reason}${replayed}`,
   };
 }
 
