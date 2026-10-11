@@ -1,16 +1,23 @@
 import { create } from 'zustand';
 
 import type { JournalEvent } from '@/api/types';
+import type { ConnectionEntry } from '@/db/connection-log';
 
 type JournalState = {
   /** Backend events, newest first. */
   events: JournalEvent[];
+  /** The app's own connection changes, newest first. */
+  connections: ConnectionEntry[];
+
   setEvents: (events: JournalEvent[]) => void;
   mergeEvents: (incoming: JournalEvent[]) => void;
+  setConnections: (connections: ConnectionEntry[]) => void;
+  addConnection: (entry: ConnectionEntry) => void;
 };
 
 export const useJournalStore = create<JournalState>((set, get) => ({
   events: [],
+  connections: [],
 
   setEvents: (events) => set({ events }),
 
@@ -24,4 +31,8 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       events: [...byId.values()].sort((a, b) => b.ts - a.ts || b.eventId - a.eventId),
     });
   },
+
+  setConnections: (connections) => set({ connections }),
+
+  addConnection: (entry) => set((state) => ({ connections: [entry, ...state.connections] })),
 }));

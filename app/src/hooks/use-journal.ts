@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 import { DeviceId } from '@/api/config';
-import { restoreJournal, syncJournal } from '@/services/journal';
+import { recordConnection, restoreJournal, syncJournal } from '@/services/journal';
 import { useTelemetryStore } from '@/stores/telemetry-store';
 
 /** Journal from the cache at launch, then caught up whenever the socket opens. */
@@ -13,6 +13,7 @@ export function useJournal() {
   }, []);
 
   useEffect(() => {
+    recordConnection(connection);
     if (connection === 'open') syncJournal(DeviceId);
   }, [connection]);
 }
