@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DeviceId } from '@/api/config';
+import type { Thresholds } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing, TopInset } from '@/constants/theme';
-import { DeviceId } from '@/api/config';
-import type { Thresholds } from '@/api/types';
 import { useTheme } from '@/hooks/use-theme';
 import { enqueueThresholds } from '@/services/command-queue';
+import { setAlertsEnabled } from '@/services/notifications';
 import { applyThresholds } from '@/services/thresholds';
 import { inFlightCommand, useCommandStore } from '@/stores/command-store';
+import { usePreferenceStore } from '@/stores/preference-store';
 import { useThresholdStore } from '@/stores/threshold-store';
 import { parseBound, validate, type ThresholdErrors } from '@/utils/thresholds';
 
@@ -57,8 +59,12 @@ export default function SettingsScreen() {
   const commands = useCommandStore((state) => state.commands);
   const theme = useTheme();
 
+  const alertsEnabled = usePreferenceStore((state) => state.alertsEnabled);
+  const permission = usePreferenceStore((state) => state.permission);
+
   const [draft, setDraft] = useState<Draft | null>(null);
   const [errors, setErrors] = useState<ThresholdErrors>({});
+  const [refused, setRefused] = useState(false);
 
   if (draft === null && thresholds) setDraft(toDraft(thresholds));
 
@@ -76,6 +82,11 @@ export default function SettingsScreen() {
 
     applyThresholds(DeviceId, next);
     enqueueThresholds(DeviceId, next);
+  }
+
+  async function toggleAlerts(enabled: boolean) {
+    const result = await setAlertsEnabled(enabled);
+    setRefused(enabled && (result === 'denied' || result === 'undetermined'));
   }
 
   return (
@@ -134,6 +145,39 @@ export default function SettingsScreen() {
               <ThemedText type="small" themeColor="textSecondary">
                 Un champ vide signifie que la borne n’est pas surveillée.
               </ThemedText>
+
+              <View style={styles.separator} />
+
+              <View style={styles.field}>
+                <ThemedText type="small" style={styles.label}>
+                  Alertes sur ce téléphone
+                </ThemedText>
+                <Switch
+                  value={alertsEnabled}
+                  onValueChange={toggleAlerts}
+                  disabled={permission === 'unavailable'}
+                  accessibilityLabel="Recevoir les alertes sur ce téléphone"
+                />
+              </View>
+
+              <ThemedText type="small" themeColor="textSecondary">
+                Pour être prévenu quand un seuil est franchi ou que le capteur ne répond plus
+                depuis 3 minutes, tant que l’app est ouverte.
+              </ThemedText>
+
+              {permission === 'unavailable' && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Indisponible dans Expo Go sur Android : les notifications nécessitent un build
+                  de développement. Les alertes restent visibles dans l’app et dans le Journal.
+                </ThemedText>
+              )}
+
+              {refused && (
+                <ThemedText type="small" style={styles.error}>
+                  Notifications refusées{permission === 'denied' ? ' dans les réglages du téléphone' : ''}.
+                  Les alertes restent visibles dans l’app et dans le Journal.
+                </ThemedText>
+              )}
             </>
           )}
         </ScrollView>
@@ -180,6 +224,12 @@ const styles = StyleSheet.create({
   },
   unit: {
     width: 32,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#eaeaea',
+    opacity: 0.3,
+    marginVertical: Spacing.two,
   },
   error: {
     color: '#ff3b30',

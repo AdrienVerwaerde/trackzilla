@@ -11,6 +11,7 @@ import {
   saveDeviceStatus,
   saveMeasurements,
 } from '@/db/telemetry-cache';
+import { handleAlertEvent } from '@/services/alerts';
 import { handleCommandEvent } from '@/services/command-queue';
 import { handleJournalEvent } from '@/services/journal';
 import { useCommandStore } from '@/stores/command-store';
@@ -149,6 +150,7 @@ export function useTelemetrySocket() {
           cacheEvent(event);
           handleCommandEvent(event).catch((error) => console.warn('[queue]', error));
           handleJournalEvent(event, useTelemetryStore.getState().deviceId);
+          handleAlertEvent(event, useTelemetryStore.getState().deviceId);
         } catch {
           console.warn('[telemetry] unreadable frame', message.data);
         }
