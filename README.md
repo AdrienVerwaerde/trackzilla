@@ -20,20 +20,30 @@ En développement, `npm run dev` relance le backend à chaque modification.
 
 Dans `app/.env`, `EXPO_PUBLIC_API_URL` doit pointer vers l'**IP du portable** sur le réseau partagé, pas `localhost`.
 
+Le backend refuse de démarrer sans ses secrets d'authentification. À générer une fois dans `backend/` :
+
+```bash
+npm run hash-password -- '<mot de passe du groupe>'                           # → AUTH_PASSWORD_HASH
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"  # → JWT_SECRET
+```
+
 ## Contrat d'API
 
 ```
+POST /auth/login                                ← { "username", "password" }
+     → 200 { "token", "expiresAt" }     JWT HS256, 15 min · 401 si identifiants faux
+
 GET  /devices                                   → [{ id, group, status, lastSeen, led }]
 GET  /devices/:id/measurements?from=&to=&step=  → [{ ts, t, h }]
 GET  /devices/:id/thresholds                    → { tMin, tMax, hMin, hMax, holdMinutes }
-PUT  /devices/:id/thresholds                    ← même objet
+PUT  /devices/:id/thresholds                    ← même objet          🔒 Authorization: Bearer <token>
      → 400 si : t hors [-10, 50] °C · h hors [0, 100] % · tMin ≥ tMax · hMin ≥ hMax
                 holdMinutes hors [0, 1440] · une borne à null n'est pas surveillée
 GET  /devices/:id/events?from=&to=&limit=       → [{ eventId, device, ts, type, ...payload }]
      du plus ancien au plus récent · sans from : les `limit` derniers (200 par défaut, 1000 max)
      avec from : depuis from inclus, dédoublonner sur eventId
      type : alert | alert_cleared | status | command | command_status
-POST /devices/:id/commands                      ← { "id": "c-7f3a…", "led": true }
+POST /devices/:id/commands                      ← { "id": "c-7f3a…", "led": true }   🔒 Bearer
      → 202 { "id", "status": "sent" }   première fois : publié sur …/cmd
      → 200 { "id", "status" }           id déjà vu : rien n'est republié
      → 409                              id déjà vu pour un autre device ou état
@@ -49,6 +59,8 @@ WS   measurement    { device, ts, t, h }
 ```
 
 Tous les `ts` sont en secondes epoch, UTC.
+
+🔒 : sans jeton valide → **401**. Au-delà de la limite de débit → **429**. Les lectures (`GET`, WebSocket) restent ouvertes.
 
 ## Choix côté backend
 
@@ -83,6 +95,24 @@ Les bornes plausibles (-10 à 50 °C, 0 à 100 % d'humidité) correspondent à u
 `GET /devices/:id/events` renvoie les alertes, les retours à la normale, les passages online/offline et chaque commande avec son statut. Avec `from`, l'app ne recharge que ce qui manque. `from` est inclus, parce que plusieurs événements peuvent partager la même seconde : l'app dédoublonne sur `eventId`.
 
 Un statut online/offline n'est journalisé que s'il change : le broker rejoue le dernier statut à chaque reconnexion, et ce n'est pas un événement.
+
+## Sécurité (TP5)
+
+### Backend
+
+**Un compte par groupe, un jeton court.** `POST /auth/login` délivre un JWT HS256 valable 15 minutes. Rien ne permet de révoquer un jeton : la durée courte est ce qui limite la vie d'un jeton volé. Le mot de passe n'est jamais stocké, ni en base ni dans `.env` : seul son hachage scrypt (`AUTH_PASSWORD_HASH`) y figure, si bien qu'un `.env` qui fuit ne donne pas l'identifiant. La comparaison se fait en temps constant, et un nom d'utilisateur faux prend autant de temps qu'un mot de passe faux : le chronométrage ne dit pas lequel était bon.
+
+**Toute action exige le jeton.** `POST /commands` et `PUT /thresholds` répondent 401 sans `Authorization: Bearer <token>` valide. L'algorithme est imposé à la vérification (`HS256`) : accepter celui qu'annonce l'en-tête du jeton, c'est laisser passer les jetons `alg: none`. Chaque commande est journalisée avec son auteur.
+
+**Les lectures restent ouvertes, et c'est un choix.** Le tableau de bord, l'historique et le WebSocket montrent des relevés de serre, pas de quoi piloter quoi que ce soit, et c'est ce que l'app affiche avant toute connexion. Risque résiduel : qui connaît l'URL peut lire les mesures.
+
+**Limites de débit**, par IP et par minute : 10 commandes, 10 modifications de seuils, 5 tentatives de connexion. Une LED basculée plus de dix fois par minute, c'est un script, pas une personne ; cinq essais par minute rendent la devinette de mot de passe impraticable.
+
+**CORS strict** : seules les origines de `CORS_ORIGINS` reçoivent les en-têtes CORS. CORS n'est appliqué que par les navigateurs : l'app native et `curl` n'envoient pas d'`Origin` et ne sont pas concernés. Ce qui protège vraiment les actions, c'est le jeton.
+
+**Pas de démarrage à moitié sécurisé.** Si un secret manque, ou si `JWT_SECRET` fait moins de 32 caractères, le serveur refuse de démarrer plutôt que de tourner porte ouverte. Le corps des requêtes est plafonné à 10 ko et l'en-tête `X-Powered-By` est retiré.
+
+**Vers le broker**, la connexion MQTT vérifie le certificat TLS (comportement par défaut de `mqtt.js`, jamais désactivé), avec un identifiant propre au backend, distinct de celui du boîtier.
 
 ## Choix côté app
 
@@ -128,6 +158,8 @@ La migration vers cette file généralisée est gardée par `PRAGMA user_version
 
 Deux déclencheurs, en notifications locales (`expo-notifications`) : un événement `alert` reçu du backend, et un boîtier `offline` depuis plus de 3 minutes.
 
+**Icônes.** Android dessine la petite icône de notification comme une silhouette d'une seule couleur : l'illustration de l'app y deviendrait un carré blanc. Les notifications portent donc une citrouille blanche (`notification-icon.png`), teintée en orange `#fe7f30` ; l'icône de l'app est l'illustration du potager (`icon.png`, 1024 × 1024 sans transparence, comme l'exige iOS), et l'icône thématique d'Android 13 reprend la citrouille. Ces icônes sont compilées dans le build : un rechargement Metro ne suffit pas, il faut réinstaller un build de développement.
+
 **Une notification par événement, jamais par mesure.** L'app notifie sur la trame `alert`, que le backend n'envoie qu'une fois par dépassement, après `holdMinutes`. Le boîtier silencieux n'est signalé qu'une fois par période de silence (repérée par son `lastSeen`), et seulement quand le socket est ouvert : socket fermé, le statut affiché vient du cache, et le silence peut être le nôtre plutôt que celui du boîtier. Le retour à la normale n'est pas notifié ; il apparaît dans l'app et dans le Journal.
 
 **La permission au bon moment.** Elle n'est jamais demandée au lancement, seulement quand l'utilisateur active les alertes dans Réglages, sous une phrase qui dit pourquoi. Un refus ne casse rien : l'interrupteur reste éteint et les alertes restent visibles dans l'app et dans le Journal.
@@ -162,3 +194,10 @@ Hors ligne, la bannière date la dernière mesure (« Hors ligne · dernières d
 | --- | --- | --- |
 | Adrien Verwaerde | App (tableau de bord, historique, cycle de vie du WebSocket, bannière réseau, cache local) | `frontend`, `frontend_graph`, `frontend_local-cache` |
 | Samantha | Backend (MQTT, stockage, historique, seuils, commandes, WebSocket, journal, mode hors ligne) | `backend`, `backend_offline_mode` |
+
+**Rotation du TP5** — chacun sécurise une couche qu'il n'a pas écrite :
+
+| Membre | Couche sécurisée | Branches |
+| --- | --- | --- |
+| Adrien Verwaerde | Backend (JWT, limites de débit, CORS) et broker (identifiants, ACL, anonyme coupé) | `backend_cybersécurité` |
+| Samantha | App (`expo-secure-store`, config EAS, WSS) et firmware (`setCACert`, NTP) | _à compléter_ |
