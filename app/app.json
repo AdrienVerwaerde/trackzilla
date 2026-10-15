@@ -5,19 +5,15 @@
     "owner": "adrienverwaerde",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.jpg",
+    "icon": "./assets/images/icon.png",
     "scheme": "potageek",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon"
-    },
     "android": {
       "package": "com.potageek.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#F1E4C2",
+        "foregroundImage": "./assets/images/icon.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome-pumpkin.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -35,7 +31,14 @@
           "imageWidth": 76
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#fe7f30"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
