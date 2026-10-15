@@ -47,15 +47,27 @@ export function getEvents(device: string, range: { from?: number; to?: number; l
 export const getThresholds = (device: string) =>
   request<Thresholds>(`/devices/${encodeURIComponent(device)}/thresholds`);
 
-export const putThresholds = (device: string, thresholds: Thresholds) =>
+/** A JWT valid for a few minutes; `expiresAt` in epoch seconds. */
+export const login = (username: string, password: string) =>
+  request<{ token: string; expiresAt: number }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  });
+
+// Reads stay open on the backend: only the two actions below carry the token.
+const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+export const putThresholds = (device: string, thresholds: Thresholds, token: string) =>
   request<Thresholds>(`/devices/${encodeURIComponent(device)}/thresholds`, {
     method: 'PUT',
+    headers: bearer(token),
     body: JSON.stringify(thresholds),
   });
 
 /** The `id` is ours: the backend publishes a given one only once. */
-export const sendCommand = (device: string, command: { id: string; led: boolean }) =>
+export const sendCommand = (device: string, command: { id: string; led: boolean }, token: string) =>
   request<CommandAck>(`/devices/${encodeURIComponent(device)}/commands`, {
     method: 'POST',
+    headers: bearer(token),
     body: JSON.stringify(command),
   });

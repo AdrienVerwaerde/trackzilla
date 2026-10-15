@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DeviceId } from '@/api/config';
 import type { Thresholds } from '@/api/types';
+import { AccountSection } from '@/components/account-section';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing, TopInset } from '@/constants/theme';
@@ -96,6 +97,10 @@ export default function SettingsScreen() {
           <View style={styles.header}>
             <ThemedText type="subtitle">Réglages</ThemedText>
           </View>
+
+          <AccountSection />
+
+          <View style={styles.separator} />
 
           {!loaded || !draft ? (
             <ThemedText type="small" themeColor="textSecondary">

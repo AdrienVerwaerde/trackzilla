@@ -11,12 +11,16 @@ import {
   type CommandStatus,
   type QueuedCommand,
 } from '@/db/command-cache';
+import { signOut } from '@/services/auth';
+import { currentToken } from '@/stores/auth-store';
 import { useCommandStore } from '@/stores/command-store';
 import { useSensorStore } from '@/stores/sensor-store';
 import { backoffDelay } from '@/utils/backoff';
 
 /** Given up on after this many network failures. */
 const MaxAttempts = 5;
+
+const LoginNeeded = 'Connectez-vous dans Réglages pour envoyer les commandes';
 
 // One drainer at a time: the socket opening and NetInfo returning fire together,
 // and two passes would send the same order twice.
@@ -80,7 +84,15 @@ export async function drainQueue(device: string) {
 
   try {
     for (const command of await readUnsent(device)) {
-      const keepGoing = await attempt(command);
+      // Logged out, the order waits in the queue as it would offline: logging
+      // in drains it.
+      const token = currentToken();
+      if (!token) {
+        useCommandStore.getState().setError(LoginNeeded);
+        break;
+      }
+
+      const keepGoing = await attempt(command, token);
       if (!keepGoing) break;
     }
   } finally {
@@ -98,24 +110,32 @@ export function drainNow(device: string) {
  * A LED order is only `sent` until the box reports back. A threshold PUT has
  * nothing to confirm it: the 200 is the confirmation.
  */
-async function send(command: QueuedCommand): Promise<CommandStatus> {
+async function send(command: QueuedCommand, token: string): Promise<CommandStatus> {
   if (command.kind === 'thresholds') {
-    await putThresholds(command.device, command.payload);
+    await putThresholds(command.device, command.payload, token);
     return 'acked';
   }
 
-  const ack = await sendCommand(command.device, { id: command.id, led: command.payload.led });
+  const ack = await sendCommand(command.device, { id: command.id, led: command.payload.led }, token);
   return ack.status;
 }
 
 /** False when the network is gone and the rest of the pass should wait. */
-async function attempt(command: QueuedCommand): Promise<boolean> {
+async function attempt(command: QueuedCommand, token: string): Promise<boolean> {
   const attempts = command.attempts + 1;
 
   try {
-    await settle(command.id, await send(command), attempts, null);
+    await settle(command.id, await send(command, token), attempts, null);
     return true;
   } catch (error) {
+    // The token was refused: expired early, or the backend's secret changed.
+    // Not the order's fault, so it stays queued until the next login.
+    if (error instanceof ApiError && error.status === 401) {
+      await signOut();
+      useCommandStore.getState().setError(LoginNeeded);
+      return false;
+    }
+
     // A 4xx is a refusal: the same request will be refused again. A 5xx is the
     // backend having a bad moment, which is worth retrying.
     if (error instanceof ApiError && error.status < 500) {
