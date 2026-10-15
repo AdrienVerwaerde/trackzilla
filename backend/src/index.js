@@ -1,8 +1,12 @@
 import { evaluate } from './alerts.js';
+import { assertAuthConfig } from './auth.js';
 import { createHub } from './hub.js';
 import { connectBroker } from './mqtt.js';
 import { createServer } from './server.js';
 import { expireCommands, recordLedState, recordMeasurement, recordStatus } from './store.js';
+
+// Refuse to start half-secured: a missing secret must not mean an open door.
+assertAuthConfig();
 
 const group = process.env.MQTT_GROUP;
 const port = Number(process.env.PORT ?? 3000);

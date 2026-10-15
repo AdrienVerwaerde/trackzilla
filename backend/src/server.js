@@ -1,4 +1,8 @@
+import cors from 'cors';
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
+
+import { login, requireAuth } from './auth.js';
 
 import {
   deviceExists,
@@ -46,12 +50,58 @@ const inRange = (value, { min, max }) => value === null || (value >= min && valu
 const isCommandId = (value) => typeof value === 'string' && value.length > 0 && value.length <= 64;
 
 /**
+ * Browsers only: CORS is enforced by the browser, so the native app and curl
+ * (no `Origin` header) are not concerned. Any web origin outside the list gets
+ * no CORS headers, and the browser refuses to hand it the response.
+ */
+const allowedOrigins = (process.env.CORS_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const corsPolicy = cors({
+  origin: (origin, done) => done(null, !origin || allowedOrigins.includes(origin)),
+  methods: ['GET', 'POST', 'PUT'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+});
+
+const limiter = (limit, what) =>
+  rateLimit({
+    windowMs: 60_000,
+    limit,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: `too many ${what}, retry in a minute` },
+  });
+
+/** Slows password guessing down to a handful of tries a minute. */
+const loginLimiter = limiter(5, 'login attempts');
+/** A LED toggled more than this is a script, not a person. */
+const commandLimiter = limiter(10, 'commands');
+const thresholdsLimiter = limiter(10, 'threshold changes');
+
+/**
  * `publishCommand` is injected rather than imported: this module answers HTTP
  * and knows nothing about MQTT. index.js is the only place aware of both.
  */
 export function createServer({ publishCommand }) {
   const app = express();
-  app.use(express.json());
+  // Says nothing useful to the app, and tells an attacker which CVEs to try.
+  app.disable('x-powered-by');
+  app.use(corsPolicy);
+  // Every legitimate body is a few dozen bytes.
+  app.use(express.json({ limit: '10kb' }));
+
+  app.post('/auth/login', loginLimiter, (req, res) => {
+    const session = login(req.body?.username, req.body?.password);
+    // One message for both wrong fields: telling them apart confirms usernames.
+    if (!session) return res.status(401).json({ error: 'invalid credentials' });
+    res.json(session);
+  });
+
+  // Reads stay open on purpose: the dashboard and the history are what the app
+  // shows before anyone logs in, and they reveal greenhouse readings, not
+  // control. Only what changes the world below requires a token.
 
   app.get('/devices', (_req, res) => res.json(listDevices()));
 
@@ -101,7 +151,7 @@ export function createServer({ publishCommand }) {
     res.json(getThresholds(req.params.id));
   });
 
-  app.put('/devices/:id/thresholds', (req, res) => {
+  app.put('/devices/:id/thresholds', requireAuth, thresholdsLimiter, (req, res) => {
     if (!deviceExists(req.params.id)) return notFound(res);
 
     const { tMin = null, tMax = null, hMin = null, hMax = null, holdMinutes } = req.body ?? {};
@@ -132,7 +182,7 @@ export function createServer({ publishCommand }) {
     res.json(saveThresholds(req.params.id, { tMin, tMax, hMin, hMax, holdMinutes }));
   });
 
-  app.post('/devices/:id/commands', (req, res) => {
+  app.post('/devices/:id/commands', requireAuth, commandLimiter, (req, res) => {
     const device = req.params.id;
     if (!deviceExists(device)) return notFound(res);
 
@@ -155,8 +205,9 @@ export function createServer({ publishCommand }) {
     }
 
     const topic = publishCommand(device, { led });
-    recordEvent(device, nowSeconds(), 'command', { id, led });
-    console.log(`[cmd] ${topic} ${JSON.stringify({ id, led })}`);
+    // Who sent it goes in the journal: with a token, a command has an author.
+    recordEvent(device, nowSeconds(), 'command', { id, led, by: req.user });
+    console.log(`[cmd] ${topic} ${JSON.stringify({ id, led })} by ${req.user}`);
 
     // 202, not 200: the command left for the broker. Whether the box received
     // it, let alone obeyed, is something this request can never know.
