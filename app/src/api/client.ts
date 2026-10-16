@@ -16,6 +16,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
   if (!response.ok) throw new ApiError(response.status, `${init?.method ?? 'GET'} ${path} → ${response.status}`);
+  // 204 has no body to parse.
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -70,4 +72,19 @@ export const sendCommand = (device: string, command: { id: string; led: boolean 
     method: 'POST',
     headers: bearer(token),
     body: JSON.stringify(command),
+  });
+
+/** Lets the backend push alerts to this phone while the app is closed. */
+export const registerPushToken = (pushToken: string, token: string) =>
+  request<void>('/push-tokens', {
+    method: 'POST',
+    headers: bearer(token),
+    body: JSON.stringify({ token: pushToken }),
+  });
+
+export const unregisterPushToken = (pushToken: string, token: string) =>
+  request<void>('/push-tokens', {
+    method: 'DELETE',
+    headers: bearer(token),
+    body: JSON.stringify({ token: pushToken }),
   });

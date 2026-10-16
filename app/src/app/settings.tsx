@@ -10,6 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing, TopInset } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { enqueueThresholds } from '@/services/command-queue';
+import { crashForSentryTest, crashTestEnabled } from '@/services/monitoring';
 import { setAlertsEnabled } from '@/services/notifications';
 import { applyThresholds } from '@/services/thresholds';
 import { inFlightCommand, useCommandStore } from '@/stores/command-store';
@@ -184,6 +185,14 @@ export default function SettingsScreen() {
                 </ThemedText>
               )}
             </>
+          )}
+
+          {crashTestEnabled && (
+            <Pressable onPress={crashForSentryTest} accessibilityRole="button">
+              <ThemedView type="backgroundSelected" style={styles.saveButton}>
+                <ThemedText type="smallBold">CRASH DE TEST (SENTRY)</ThemedText>
+              </ThemedView>
+            </Pressable>
           )}
         </ScrollView>
       </SafeAreaView>

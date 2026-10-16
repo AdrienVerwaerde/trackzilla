@@ -15,13 +15,16 @@ import { useCommandQueue } from '@/hooks/use-command-queue';
 import { useJournal } from '@/hooks/use-journal';
 import { useNotificationPreferences } from '@/hooks/use-notification-preferences';
 import { useOfflineAlert } from '@/hooks/use-offline-alert';
+import { usePushRegistration } from '@/hooks/use-push-registration';
 import { useThresholds } from '@/hooks/use-thresholds';
 import { useNetwork } from '@/hooks/use-network';
 import { useTelemetrySocket } from '@/hooks/use-telemetry-socket';
+import { initMonitoring, wrapRoot } from '@/services/monitoring';
 
+initMonitoring();
 SplashScreen.preventAutoHideAsync();
 
-export default function TabLayout() {
+function TabLayout() {
   const colorScheme = useColorScheme();
   const [fontsLoaded] = useFonts({ Oi_400Regular });
   useAppLifecycle();
@@ -33,6 +36,7 @@ export default function TabLayout() {
   useJournal();
   useThresholds();
   useNotificationPreferences();
+  usePushRegistration();
   useOfflineAlert();
   useTelemetrySocket();
 
@@ -54,3 +58,6 @@ export default function TabLayout() {
     </ThemeProvider>
   );
 }
+
+// Catches render errors as well as uncaught ones, and tags them with the screen.
+export default wrapRoot(TabLayout);

@@ -3,6 +3,7 @@ import express from 'express';
 import { rateLimit } from 'express-rate-limit';
 
 import { login, requireAuth } from './auth.js';
+import { addPushToken, isPushToken, removePushToken } from './push.js';
 
 import {
   deviceExists,
@@ -61,7 +62,7 @@ const allowedOrigins = (process.env.CORS_ORIGINS ?? '')
 
 const corsPolicy = cors({
   origin: (origin, done) => done(null, !origin || allowedOrigins.includes(origin)),
-  methods: ['GET', 'POST', 'PUT'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 });
 
@@ -97,6 +98,24 @@ export function createServer({ publishCommand }) {
     // One message for both wrong fields: telling them apart confirms usernames.
     if (!session) return res.status(401).json({ error: 'invalid credentials' });
     res.json(session);
+  });
+
+  // Behind the token: an open route would let anyone subscribe a phone to the
+  // greenhouse's alerts.
+  app.post('/push-tokens', requireAuth, (req, res) => {
+    const { token } = req.body ?? {};
+    if (!isPushToken(token)) return badRequest(res, '`token` must be an Expo push token');
+
+    addPushToken(token);
+    res.status(204).end();
+  });
+
+  app.delete('/push-tokens', requireAuth, (req, res) => {
+    const { token } = req.body ?? {};
+    if (!isPushToken(token)) return badRequest(res, '`token` must be an Expo push token');
+
+    removePushToken(token);
+    res.status(204).end();
   });
 
   // Reads stay open on purpose: the dashboard and the history are what the app

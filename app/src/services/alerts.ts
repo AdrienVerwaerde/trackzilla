@@ -1,6 +1,7 @@
 import { nowSeconds } from '@/api/client';
 import type { SocketEvent } from '@/api/types';
 import { notify } from '@/services/notifications';
+import { pushActive } from '@/services/push';
 import { useTelemetryStore } from '@/stores/telemetry-store';
 import { formatValue, ThresholdLabels } from '@/utils/format';
 
@@ -15,6 +16,8 @@ let reportedSilence: number | null = null;
  */
 export function handleAlertEvent(event: SocketEvent, device: string) {
   if (event.type !== 'alert' || event.device !== device) return;
+  // The backend has pushed this same alert to this phone already.
+  if (pushActive()) return;
 
   const unit = event.kind.startsWith('t') ? '°C' : '%';
   notify(
