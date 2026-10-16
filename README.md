@@ -27,11 +27,23 @@ npm run hash-password -- '<mot de passe du groupe>'                           # 
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"  # → JWT_SECRET
 ```
 
+Tests et vérifications :
+
+```bash
+cd backend && npm test              # logique de seuils (Jest, base en mémoire)
+cd app && npm test                  # file de commandes (Jest, sans téléphone)
+cd backend && npm run sentry-test   # envoie une erreur de test à Sentry
+```
+
 ## Contrat d'API
 
 ```
 POST /auth/login                                ← { "username", "password" }
      → 200 { "token", "expiresAt" }     JWT HS256, 15 min · 401 si identifiants faux
+
+POST   /push-tokens                             ← { "token": "ExponentPushToken[…]" }   🔒 Bearer
+DELETE /push-tokens                             ← même objet                              🔒 Bearer
+     → 204 · 400 si ce n'est pas un jeton Expo · enregistrer deux fois le même jeton ne fait rien
 
 GET  /devices                                   → [{ id, group, status, lastSeen, led }]
 GET  /devices/:id/measurements?from=&to=&step=  → [{ ts, t, h }]
@@ -164,7 +176,7 @@ Deux déclencheurs, en notifications locales (`expo-notifications`) : un événe
 
 **La permission au bon moment.** Elle n'est jamais demandée au lancement, seulement quand l'utilisateur active les alertes dans Réglages, sous une phrase qui dit pourquoi. Un refus ne casse rien : l'interrupteur reste éteint et les alertes restent visibles dans l'app et dans le Journal.
 
-**Limite assumée : pas d'alerte app fermée.** Le socket est fermé en arrière-plan, donc l'app n'apprend rien tant qu'elle n'est pas au premier plan. C'est le push distant du jour 6, envoyé par le backend, qui lèvera cette limite.
+**App fermée : le push du backend prend le relais.** Le socket est fermé en arrière-plan, donc l'app n'apprend rien tant qu'elle n'est pas au premier plan : c'est le backend qui prévient, par push (voir « Livraison (TP6) »). Dès que le push est actif, la notification locale d'`alert` se tait, sinon un même dépassement sonnerait deux fois. Le boîtier silencieux depuis 3 minutes reste une notification locale : seule une app ouverte la déclenche.
 
 **Expo Go sur Android.** Depuis le SDK 53, le simple import d'`expo-notifications` y lève une erreur : un fichier à effet de bord enregistre un écouteur de jeton push au chargement. Le module est donc chargé à la demande, et l'interrupteur est désactivé dans Expo Go sur Android ; les notifications se testent avec le build de développement (`eas build --profile development`).
 
@@ -188,6 +200,58 @@ Les événements n'arrivent jamais par le socket directement : une trame `alert`
 
 Hors ligne, la bannière date la dernière mesure (« Hors ligne · dernières données à 14h02 ») et la carte passe de « Mesure à » à « Dernière mesure à ». Le statut du capteur ne s'affiche jamais en vert tant que le socket est fermé : ce qui vient du cache est annoncé comme « Dernier état connu », parce qu'un point vert ressorti de la veille est un mensonge. Les courbes sont atténuées quand elles viennent du cache ; l'atténuation porte sur les graphiques et non sur leurs libellés, le plancher de contraste de 4,5:1 s'appliquant au texte.
 
+## Livraison (TP6)
+
+### Configuration : `app.config.js` et variables EAS
+
+`app.json` garde ce qui ne change jamais ; `app.config.js` y ajoute ce qui varie d'une machine ou d'un build à l'autre, lu dans l'environnement : `app/.env` en local, les **variables EAS** sur un build cloud. Chaque profil d'`eas.json` a son environnement EAS et son **canal** de mise à jour (`development`, `preview`, `production`).
+
+| Variable | Où | Rôle |
+| --- | --- | --- |
+| `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_WS_URL`, `EXPO_PUBLIC_DEVICE_ID` | bundle | l'adresse du backend, seule chose que l'app connaît |
+| `EXPO_PUBLIC_SENTRY_DSN` | bundle | où envoyer les crashs (public par nature) |
+| `EXPO_PUBLIC_SENTRY_CRASH_TEST` | bundle | `true` affiche le bouton de crash de test dans Réglages |
+| `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | build seulement | envoi des source maps ; le jeton est une variable secrète EAS |
+| `GOOGLE_SERVICES_JSON` | build seulement | fichier Firebase, variable « fichier » EAS, jamais dans Git |
+
+Les `EXPO_PUBLIC_*` sont inscrites en clair dans le bundle : on n'y met que ce qui peut l'être. Un build cloud sans `EXPO_PUBLIC_API_URL` échoue tout de suite, plutôt que de livrer un APK qui ne joint rien.
+
+```bash
+npx eas-cli build --profile preview --platform android      # APK autonome
+npx eas-cli update --channel preview --environment preview --message "…"
+```
+
+### Notifications push
+
+Le jeton push n'est demandé **qu'une fois les alertes activées** dans Réglages, permission accordée, et l'utilisateur connecté. L'app l'envoie alors au backend (`POST /push-tokens`) et le renvoie à chaque lancement : il peut changer après une réinstallation, et le backend ignore les doublons. Désactiver les alertes le retire (`DELETE /push-tokens`).
+
+La route est **derrière le JWT** : ouverte, elle laisserait n'importe qui abonner son téléphone aux alertes de la serre.
+
+À chaque `alert` — une seule par dépassement, après `holdMinutes` — le backend appelle l'**API Expo Push** pour chaque jeton, sur le canal Android `alerts`. Un jeton que Expo déclare `DeviceNotRegistered` (application désinstallée) est supprimé. Un échec d'envoi est journalisé et remonté à Sentry, sans jamais empêcher les mesures d'être enregistrées.
+
+Sur Android, Expo Push passe par Firebase : le build a besoin de `google-services.json`, et la clé de compte de service FCM v1 est déposée dans les identifiants EAS (`npx eas-cli credentials`). Le push ne marche pas dans Expo Go : il se teste sur l'APK.
+
+### Sentry
+
+- **App** : `@sentry/react-native`, initialisé avant le premier rendu (un crash au démarrage est capturé), racine enveloppée par `Sentry.wrap`. Chaque rapport porte le canal et l'identifiant de la mise à jour OTA : après un `eas update`, le numéro de build ne dit plus quel JavaScript tournait. `metro.config.js` ajoute les identifiants de débogage pour que la pile pointe vers le code source.
+- **Backend** : `@sentry/node`, chargé par `node --import ./src/instrument.js` avant tout le reste, pour qu'il instrumente Express. Le gestionnaire d'erreurs Express de Sentry est branché après toutes les routes. `npm run sentry-test` vérifie le DSN sans faire tomber le serveur.
+- **Pas de données personnelles** (`sendDefaultPii: false`) : les corps de requête contiennent des mots de passe et des jetons push.
+- **Sans DSN, pas de Sentry** : une machine sans la variable fonctionne comme avant, et les tests n'envoient rien.
+- **Le crash de test est un réglage, pas du code** : le bouton n'existe que si `EXPO_PUBLIC_SENTRY_CRASH_TEST=true`. L'oublier ne peut donc pas faire planter l'app devant le jury, et une mise à jour OTA suffit à le retirer.
+
+### Mises à jour OTA (`eas update`)
+
+`runtimeVersion` suit la version de l'app (`policy: appVersion`). Une mise à jour OTA ne remplace que le **JavaScript** : elle ne peut pas ajouter une bibliothèque native. Ajouter une dépendance native impose donc d'**incrémenter `version`** et de refaire un build ; les anciens builds, de version différente, ne reçoivent plus un JavaScript qu'ils ne sauraient pas exécuter.
+
+L'app télécharge la mise à jour à son lancement et l'applique au lancement suivant : il faut la rouvrir deux fois pour voir le changement. Le canal de la mise à jour doit être celui du profil du build (`preview` pour l'APK de démo).
+
+### Tests (Jest)
+
+On teste la logique pure, sans téléphone.
+
+- **Seuils** (`backend/test/alerts.test.js`), sur une base SQLite en mémoire, sans simulation : un dépassement plus court que `holdMinutes` ne lève rien ; un dépassement maintenu lève **une seule** alerte, à la seconde près ; le retour dans la plage lève un `alert_cleared`, et le dépassement suivant attend à nouveau tout son délai ; une valeur égale au seuil n'est pas un dépassement ; une borne à `null` n'est pas surveillée.
+- **File de commandes** (`app/src/services/__tests__/command-queue.test.ts`), base et réseau simulés : rejeu dans l'ordre de création ; un nouvel essai garde le **même `id`**, et deux vidages simultanés n'envoient qu'une fois ; passage en `failed` après **5** échecs réseau, sans sixième essai ; un refus du serveur (4xx) échoue tout de suite et la file continue.
+
 ## Contribution
 
 | Membre | Couche | Branches |
@@ -201,3 +265,12 @@ Hors ligne, la bannière date la dernière mesure (« Hors ligne · dernières d
 | --- | --- | --- |
 | Adrien Verwaerde | Backend (JWT, limites de débit, CORS) et broker (identifiants, ACL, anonyme coupé) | `backend_cybersécurité` |
 | Samantha | App (`expo-secure-store`, config EAS, WSS) et firmware (`setCACert`, NTP) | _à compléter_ |
+
+**TP6 — livraison :**
+
+| Membre | Travail | Branches |
+| --- | --- | --- |
+| Adrien Verwaerde | `app.config.js` et variables EAS, push (app et backend), Sentry côté app, `expo-updates`, tests Jest | `backend_sentry` |
+| Samantha | Sentry côté backend (`instrument.js`, gestionnaire d'erreurs Express) | `backend_sentry` |
+
+Signatures : Adrien Verwaerde ______  ·  Samantha ______

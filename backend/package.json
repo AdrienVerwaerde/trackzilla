@@ -10,7 +10,8 @@
     "dev": "node --watch --env-file=.env --import ./src/instrument.js src/index.js",
     "start": "node --env-file=.env --import ./src/instrument.js src/index.js",
     "hash-password": "node scripts/hash-password.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "sentry-test": "node --env-file=.env --import ./src/instrument.js scripts/sentry-test.js"
   },
   "dependencies": {
     "@sentry/node": "^11.8.0",
