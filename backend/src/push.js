@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/node';
+
 import db from './db.js';
 import { nowSeconds } from './store.js';
 
@@ -82,5 +84,8 @@ export async function sendAlertPush({ device, kind, value, threshold }) {
     console.log(`[push] alert ${kind} accepted for ${accepted}/${tokens.length} phone(s)`);
   } catch (error) {
     console.warn('[push] could not reach Expo', error.message);
+    // Caught so the server lives on, but an alert that reached no phone is
+    // exactly what must not go unnoticed.
+    Sentry.captureException(error);
   }
 }

@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import cors from 'cors';
 import express from 'express';
 import { rateLimit } from 'express-rate-limit';
@@ -232,6 +233,10 @@ export function createServer({ publishCommand }) {
     // it, let alone obeyed, is something this request can never know.
     res.status(202).json({ id, status: command.status });
   });
+
+  // Last, after every route: a handler that throws reaches Sentry before
+  // Express answers 500. Without a DSN it only passes the error along.
+  Sentry.setupExpressErrorHandler(app);
 
   return app;
 }
