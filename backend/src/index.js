@@ -2,6 +2,7 @@ import { evaluate } from './alerts.js';
 import { assertAuthConfig } from './auth.js';
 import { createHub } from './hub.js';
 import { connectBroker } from './mqtt.js';
+import { sendAlertPush } from './push.js';
 import { createServer } from './server.js';
 import { expireCommands, recordLedState, recordMeasurement, recordStatus } from './store.js';
 
@@ -49,6 +50,8 @@ function onTelemetry(device, data) {
   for (const { type, ...payload } of evaluate(measurement)) {
     hub.broadcast(type, payload);
     console.log(`[${type}] ${device} ${payload.kind}`);
+    // The socket only reaches an app that is open; push reaches a closed one.
+    if (type === 'alert') sendAlertPush(payload);
   }
 }
 
