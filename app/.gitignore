@@ -4,3 +4,5 @@
 
 expo-env.d.ts
 # @end expo-cli
+# Firebase config for Expo Push on Android: uploaded as an EAS file variable
+google-services.json

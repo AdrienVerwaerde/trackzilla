@@ -1,3 +1,5 @@
+import type { ThresholdKind } from '@/api/types';
+
 function pad(value: number) {
   return String(value).padStart(2, '0');
 }
@@ -7,14 +9,21 @@ export function formatTime(at: number) {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-export function formatDuration(ms: number) {
-  if (ms < 1000) return `${ms}ms`;
-
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${pad(seconds % 60)}s`;
-
-  return `${Math.floor(minutes / 60)}h ${pad(minutes % 60)}m`;
+/** The hour a value was measured, as the banner says it: "14h02". */
+export function formatClock(at: number) {
+  const date = new Date(at);
+  return `${pad(date.getHours())}h${pad(date.getMinutes())}`;
 }
+
+/** Comma as the decimal separator, one decimal: "22,4". */
+export function formatValue(value: number | null | undefined) {
+  return value === null || value === undefined ? '–' : value.toFixed(1).replace('.', ',');
+}
+
+/** Display names of the threshold kinds, shared by the dashboard and the journal. */
+export const ThresholdLabels: Record<ThresholdKind, string> = {
+  tMin: 'Min-Temp',
+  tMax: 'Max-Temp',
+  hMin: 'Min-Hum',
+  hMax: 'Max-Hum',
+};

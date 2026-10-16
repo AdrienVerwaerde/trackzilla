@@ -17,26 +17,29 @@ export default function AppTabs() {
       iconColor={{ selected: SelectedTabColor }}
       labelStyle={{ selected: { color: SelectedTabColor } }}>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Accueil</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           src={require('@/assets/images/tabIcons/home.png')}
           renderingMode="template"
         />
       </NativeTabs.Trigger>
 
-
       <NativeTabs.Trigger name="dashboard">
-        <NativeTabs.Trigger.Label>Dashboard</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Contrôle Capteur</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           src={require('@/assets/images/tabIcons/explore.png')}
           renderingMode="template"
         />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="journal">
+        <NativeTabs.Trigger.Label>Journal</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="list.bullet" md="list" />
+      </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="motion">
-        <NativeTabs.Trigger.Label>Motion</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="speedometer" md="speed" />
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Label>Réglages</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="gearshape" md="settings" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

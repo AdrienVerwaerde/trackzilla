@@ -1,4 +1,4 @@
-import { Goldman_700Bold, useFonts } from '@expo-google-fonts/goldman';
+import { Oi_400Regular, useFonts } from '@expo-google-fonts/oi';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useMemo } from 'react';
@@ -7,39 +7,57 @@ import { useColorScheme } from 'react-native';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AppBackground } from '@/components/app-background';
 import AppTabs from '@/components/app-tabs';
-import { LifecycleBadge } from '@/components/lifecycle-badge';
-import { useAccelerometer } from '@/hooks/use-accelerometer';
+import { NetworkBanner } from '@/components/network-banner';
 import { useAppLifecycle } from '@/hooks/use-app-lifecycle';
-import { useBattery } from '@/hooks/use-battery';
+import { useAuth } from '@/hooks/use-auth';
+import { useCachedTelemetry } from '@/hooks/use-cached-telemetry';
+import { useCommandQueue } from '@/hooks/use-command-queue';
+import { useJournal } from '@/hooks/use-journal';
+import { useNotificationPreferences } from '@/hooks/use-notification-preferences';
+import { useOfflineAlert } from '@/hooks/use-offline-alert';
+import { usePushRegistration } from '@/hooks/use-push-registration';
+import { useThresholds } from '@/hooks/use-thresholds';
+import { useNetwork } from '@/hooks/use-network';
+import { useTelemetrySocket } from '@/hooks/use-telemetry-socket';
+import { initMonitoring, wrapRoot } from '@/services/monitoring';
 
+initMonitoring();
 SplashScreen.preventAutoHideAsync();
 
-export default function TabLayout() {
+function TabLayout() {
   const colorScheme = useColorScheme();
-  const [fontsLoaded] = useFonts({ Goldman_700Bold });
+  const [fontsLoaded] = useFonts({ Oi_400Regular });
   useAppLifecycle();
-  useAccelerometer();
-  useBattery();
+  useNetwork();
+  useAuth();
+  // Before the socket: the screen is drawn from the cache, then revalidated.
+  useCachedTelemetry();
+  useCommandQueue();
+  useJournal();
+  useThresholds();
+  useNotificationPreferences();
+  usePushRegistration();
+  useOfflineAlert();
+  useTelemetrySocket();
 
-  // The navigator paints `colors.background` behind each screen, which would sit
-  // between the background photo and the screen content.
   const theme = useMemo(() => {
     const base = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
 
     return { ...base, colors: { ...base.colors, background: 'transparent' } };
   }, [colorScheme]);
 
-  // The native splash screen stays up (auto-hide is disabled above) until Goldman
-  // is registered, so no screen ever paints with a fallback font first.
   if (!fontsLoaded) return null;
 
   return (
     <ThemeProvider value={theme}>
       <AnimatedSplashOverlay />
       <AppBackground>
-        <LifecycleBadge />
         <AppTabs />
+        <NetworkBanner />
       </AppBackground>
     </ThemeProvider>
   );
 }
+
+// Catches render errors as well as uncaught ones, and tags them with the screen.
+export default wrapRoot(TabLayout);

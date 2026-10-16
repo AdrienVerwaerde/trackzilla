@@ -1,36 +1,28 @@
 {
   "expo": {
-    "name": "Trackzilla",
-    "slug": "trackzilla",
+    "name": "Potageek",
+    "slug": "potageek",
+    "owner": "adrienverwaerde",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "trackzilla",
+    "scheme": "potageek",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon"
-    },
     "android": {
+      "package": "com.potageek.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#F1E4C2",
+        "foregroundImage": "./assets/images/icon.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome-pumpkin.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.jpg"
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-sensors",
-        {
-          "motionPermission": "Allow $(PRODUCT_NAME) to read the accelerometer to display live motion."
-        }
-      ],
       [
         "expo-splash-screen",
         {
@@ -38,11 +30,26 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#fe7f30"
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5e1ea0cc-c6c3-4910-b36f-385ee6efdf7c"
+      }
     }
   }
 }
